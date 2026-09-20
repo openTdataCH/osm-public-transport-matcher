@@ -168,7 +168,7 @@ def write_bundle(result, destination, *, metadata=None, compresslevel=1):
         try:
             engine_version = version("transport-matcher")
         except PackageNotFoundError:
-            engine_version = "0.1.0"
+            engine_version = "0.1.1"
         manifest = {
             "schema_version": SCHEMA_VERSION, "engine_version": engine_version,
             "run_id": str(uuid.uuid4()),

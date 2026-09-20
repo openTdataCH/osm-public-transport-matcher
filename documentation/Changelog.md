@@ -11,6 +11,15 @@ consumer side.
 
 ---
 
+## Version 0.1.1
+
+Documentation patch release.
+
+### Documentation
+
+- Defined package versions, immutable Git tags, deployment SHA pins and result-schema versions as separate identifiers.
+- Added the release and consumer-upgrade checklist.
+
 ## Version 0.1.0
 
 Initial independent release extracted from the original Stop Sync OSM Atlas

@@ -75,6 +75,36 @@ Use `transport-matcher --help` for acquisition and GTFS refresh options. Command
 
 See [the result format](RESULT_FORMAT.md) for the integration contract. The review application consumes that format without importing this package.
 
+## Versions, Git tags and deployment pins
+
+Four identifiers are deliberately separate:
+
+| Identifier | Example | Purpose |
+|---|---|---|
+| Package version | `0.1.1` | The engine release reported by Python package metadata and written as `engine_version` in result manifests. |
+| Git tag | `v0.1.1` | A human-readable, annotated Git/GitHub name for the release commit. A published tag is never moved or reused. |
+| Commit SHA | `0123abcd...` | The immutable source identity. Deployments pin the full SHA, even when humans refer to the corresponding tag. |
+| Result schema version | `1` | The producer/consumer file contract. It changes only when the bundle format requires coordinated consumer support. |
+
+A matching-algorithm change normally increments the package version but does not necessarily change the result schema. A breaking bundle-format change increments the schema version and requires compatible review-app support.
+
+Release checklist:
+
+1. Update the version in `pyproject.toml` and `src/transport_matcher/__init__.py`, and update the changelog.
+2. Run the full engine suite and the producer-to-consumer contract test.
+3. Commit the release, then create an annotated `v<package-version>` tag on that exact commit.
+4. Push the commit and tag. Never force-move an existing release tag.
+5. In each consumer deployment, resolve the tag once and store its full commit SHA as `ENGINE_REF`; rebuild the scheduler and documentation images.
+
+```bash
+git tag -a v0.1.1 -m "Transport Matcher 0.1.1"
+git push origin main
+git push origin v0.1.1
+git rev-list -n 1 v0.1.1
+```
+
+The tag is the readable release name; the SHA is the deployment lock.
+
 ## Documentation
 
 The canonical engine documentation lives in [`documentation/`](documentation/1.%20Download%20and%20process%20data.md):
@@ -104,7 +134,7 @@ docker run --rm --user "$(id -u):$(id -g)" \
   transport-matcher gtfs --source /inputs/gtfs --namespace demo \
   --osm /inputs/osm.xml --output /results/demo
 ```
- The image includes all supported adapter extras. Local inputs are mounted read-only; completed bundles appear in the mounted output directory. Choose a new output name for each run.
+The image includes all supported adapter extras. Local inputs are mounted read-only; completed bundles appear in the mounted output directory. Choose a new output name for each run.
 
 ## Profiles and matching behavior
 

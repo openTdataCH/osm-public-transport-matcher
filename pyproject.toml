@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "transport-matcher"
-version = "0.1.0"
+version = "0.1.1"
 description = "Independent public transport stop and route matching against OpenStreetMap"
 readme = "README.md"
 requires-python = ">=3.10"
