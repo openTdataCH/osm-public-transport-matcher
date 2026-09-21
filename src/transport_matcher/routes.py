@@ -18,6 +18,7 @@ from typing import Any
 import pandas as pd
 
 from transport_matcher.core.models import MatchingOutput
+from transport_matcher.progress import progress_stage
 
 
 _NON_WORD_RE = re.compile(r'[^a-z0-9]+')
@@ -943,17 +944,18 @@ def build_route_write_payload(
     """Compare route families and ordered itineraries, returning complete results."""
     if not 0 < min_stop_ratio <= 1:
         raise ValueError('min_stop_ratio must be greater than zero and at most one')
-    lookups = _build_base_lookups(base_data, known_sloids)
-    atlas_rows = _build_atlas_source_rows(all_route_data, known_sloids, lookups['atlas_stop_lookup'])
-    osm_rows = _build_osm_source_rows(all_route_data, lookups)
+    with progress_stage('route_matching.normalize'):
+        lookups = _build_base_lookups(base_data, known_sloids)
+        atlas_rows = _build_atlas_source_rows(all_route_data, known_sloids, lookups['atlas_stop_lookup'])
+        osm_rows = _build_osm_source_rows(all_route_data, lookups)
 
-    line_family_rows, atlas_line_to_family_id, relation_id_to_family_id = _build_line_family_rows(atlas_rows, osm_rows)
-    itinerary_rows, stop_call_rows, stop_calls_by_itinerary_id = _build_itinerary_rows(
-        atlas_rows,
-        osm_rows,
-        atlas_line_to_family_id,
-        relation_id_to_family_id,
-    )
+        line_family_rows, atlas_line_to_family_id, relation_id_to_family_id = _build_line_family_rows(atlas_rows, osm_rows)
+        itinerary_rows, stop_call_rows, stop_calls_by_itinerary_id = _build_itinerary_rows(
+            atlas_rows,
+            osm_rows,
+            atlas_line_to_family_id,
+            relation_id_to_family_id,
+        )
 
     atlas_line_families = [row for row in line_family_rows if row['source'] == 'atlas']
     osm_line_families = [row for row in line_family_rows if row['source'] == 'osm']
@@ -963,22 +965,23 @@ def build_route_write_payload(
     line_family_match_rows: list[dict[str, Any]] = []
     itinerary_match_rows: list[dict[str, Any]] = []
 
-    candidate_pairs = _candidate_line_family_pairs(atlas_line_families, osm_line_families)
-    candidate_pairs.sort(key=lambda item: (-item[0], item[1]['id'], item[2]['id']))
+    with progress_stage('route_matching.families'):
+        candidate_pairs = _candidate_line_family_pairs(atlas_line_families, osm_line_families)
+        candidate_pairs.sort(key=lambda item: (-item[0], item[1]['id'], item[2]['id']))
 
-    matched_atlas_family_ids: set[int] = set()
-    matched_osm_family_ids: set[int] = set()
-    for score, atlas_family, osm_family, reason in candidate_pairs:
-        if atlas_family['id'] in matched_atlas_family_ids or osm_family['id'] in matched_osm_family_ids:
-            continue
-        line_family_match_rows.append({
-            'id': next(line_family_match_id_counter),
-            'atlas_line_family_id': atlas_family['id'],
-            'osm_line_family_id': osm_family['id'],
-            'match_method': reason,
-        })
-        matched_atlas_family_ids.add(atlas_family['id'])
-        matched_osm_family_ids.add(osm_family['id'])
+        matched_atlas_family_ids: set[int] = set()
+        matched_osm_family_ids: set[int] = set()
+        for score, atlas_family, osm_family, reason in candidate_pairs:
+            if atlas_family['id'] in matched_atlas_family_ids or osm_family['id'] in matched_osm_family_ids:
+                continue
+            line_family_match_rows.append({
+                'id': next(line_family_match_id_counter),
+                'atlas_line_family_id': atlas_family['id'],
+                'osm_line_family_id': osm_family['id'],
+                'match_method': reason,
+            })
+            matched_atlas_family_ids.add(atlas_family['id'])
+            matched_osm_family_ids.add(osm_family['id'])
 
     itineraries_by_family_id: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for itinerary_row in itinerary_rows:
@@ -986,42 +989,43 @@ def build_route_write_payload(
     for itinerary_list in itineraries_by_family_id.values():
         itinerary_list.sort(key=lambda row: row['id'])
 
-    for line_family_match_row in line_family_match_rows:
-        atlas_itineraries = itineraries_by_family_id.get(line_family_match_row['atlas_line_family_id'], [])
-        osm_itineraries = itineraries_by_family_id.get(line_family_match_row['osm_line_family_id'], [])
-        pair_scores: dict[tuple[int, int], dict[str, Any]] = {}
-        for atlas_itinerary in atlas_itineraries:
-            atlas_calls = stop_calls_by_itinerary_id.get(atlas_itinerary['id'], [])
-            for osm_itinerary in osm_itineraries:
-                osm_calls = stop_calls_by_itinerary_id.get(osm_itinerary['id'], [])
-                pair_scores[(atlas_itinerary['id'], osm_itinerary['id'])] = _score_itinerary_pair(
-                    atlas_itinerary,
-                    osm_itinerary,
-                    atlas_calls,
-                    osm_calls,
-                    require_direction_match=require_direction_match,
-                    min_stop_ratio=min_stop_ratio,
-                    include_alignments=False,
-                )
+    with progress_stage('route_matching.itineraries'):
+        for line_family_match_row in line_family_match_rows:
+            atlas_itineraries = itineraries_by_family_id.get(line_family_match_row['atlas_line_family_id'], [])
+            osm_itineraries = itineraries_by_family_id.get(line_family_match_row['osm_line_family_id'], [])
+            pair_scores: dict[tuple[int, int], dict[str, Any]] = {}
+            for atlas_itinerary in atlas_itineraries:
+                atlas_calls = stop_calls_by_itinerary_id.get(atlas_itinerary['id'], [])
+                for osm_itinerary in osm_itineraries:
+                    osm_calls = stop_calls_by_itinerary_id.get(osm_itinerary['id'], [])
+                    pair_scores[(atlas_itinerary['id'], osm_itinerary['id'])] = _score_itinerary_pair(
+                        atlas_itinerary,
+                        osm_itinerary,
+                        atlas_calls,
+                        osm_calls,
+                        require_direction_match=require_direction_match,
+                        min_stop_ratio=min_stop_ratio,
+                        include_alignments=False,
+                    )
 
-        chosen_pairs = _choose_best_itinerary_pairs(atlas_itineraries, osm_itineraries, pair_scores)
-        matched_atlas_itinerary_ids: set[int] = set()
-        matched_osm_itinerary_ids: set[int] = set()
-        for atlas_itinerary, osm_itinerary, score_row in chosen_pairs:
-            itinerary_match_id = next(itinerary_match_id_counter)
-            matched_atlas_itinerary_ids.add(atlas_itinerary['id'])
-            matched_osm_itinerary_ids.add(osm_itinerary['id'])
-            itinerary_match_rows.append({
-                'id': itinerary_match_id,
-                'line_family_match_id': line_family_match_row['id'],
-                'atlas_itinerary_id': atlas_itinerary['id'],
-                'osm_itinerary_id': osm_itinerary['id'],
-                'direction_score': score_row['direction_score'],
-                'stop_score': score_row['stop_score'],
-                'geometry_score': score_row['geometry_score'],
-                'overall_score': score_row['overall_score'],
-                'match_reason': score_row['match_reason'],
-            })
+            chosen_pairs = _choose_best_itinerary_pairs(atlas_itineraries, osm_itineraries, pair_scores)
+            matched_atlas_itinerary_ids: set[int] = set()
+            matched_osm_itinerary_ids: set[int] = set()
+            for atlas_itinerary, osm_itinerary, score_row in chosen_pairs:
+                itinerary_match_id = next(itinerary_match_id_counter)
+                matched_atlas_itinerary_ids.add(atlas_itinerary['id'])
+                matched_osm_itinerary_ids.add(osm_itinerary['id'])
+                itinerary_match_rows.append({
+                    'id': itinerary_match_id,
+                    'line_family_match_id': line_family_match_row['id'],
+                    'atlas_itinerary_id': atlas_itinerary['id'],
+                    'osm_itinerary_id': osm_itinerary['id'],
+                    'direction_score': score_row['direction_score'],
+                    'stop_score': score_row['stop_score'],
+                    'geometry_score': score_row['geometry_score'],
+                    'overall_score': score_row['overall_score'],
+                    'match_reason': score_row['match_reason'],
+                })
 
     return {
         'atlas_line_families': atlas_rows['atlas_line_families'],

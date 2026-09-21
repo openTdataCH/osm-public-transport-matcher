@@ -11,6 +11,12 @@ consumer side.
 
 ---
 
+## Unreleased
+
+### Operations
+
+- **Versioned progress contract** — The CLI now emits a self-describing public substage plan and structured lifecycle events. The catalog consolidates low-level GTFS, proximity and problem predicates into stable operational steps while retaining detailed internal timings.
+
 ## Version 0.1.1
 
 Documentation patch release.

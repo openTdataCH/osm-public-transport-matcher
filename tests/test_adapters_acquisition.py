@@ -7,12 +7,15 @@ import pytest
 
 from transport_matcher.adapters import acquisition
 from transport_matcher.adapters.source_freshness import source_snapshot_is_unchanged
+from transport_matcher.progress import progress_reporting
+from test_progress import public_events
 
 
 @pytest.fixture
 def sources(tmp_path, monkeypatch):
     calls = {'atlas': 0, 'gtfs': 0, 'osm': 0}
     versions = {'ATLAS': '1', 'GTFS': '1'}
+    monkeypatch.setattr(acquisition, 'get_current_gtfs_permalink', lambda: 'https://example.com/gtfs.zip')
     monkeypatch.setattr(acquisition, 'probe_remote_source', lambda label, url: {
         'label': label, 'url': url, 'probe_ok': True, 'etag': versions[label]})
     monkeypatch.setattr(acquisition, '_ensure_swiss_geojson_cache', lambda path, **kw: Path(path).write_text('{}'))
@@ -41,13 +44,20 @@ def sources(tmp_path, monkeypatch):
 
 
 def refresh(path, **kwargs):
-    return acquisition.refresh_swiss(path, gtfs_url='https://example.com/gtfs.zip', **kwargs)
+    with progress_reporting():
+        return acquisition.refresh_swiss(path, gtfs_url='https://example.com/gtfs.zip', **kwargs)
 
 
-def test_refresh_reuses_verified_layers_and_always_refreshes_osm(tmp_path, sources):
+def test_refresh_reuses_verified_layers_and_always_refreshes_osm(tmp_path, sources, capsys):
     calls, versions = sources
     assert refresh(tmp_path)['preprocessing_reused'] is False
+    cold = public_events(capsys.readouterr().out)
+    assert not any(e['event'] == 'stage_outcome' for e in cold)
     assert refresh(tmp_path)['preprocessing_reused'] is True
+    warm = public_events(capsys.readouterr().out)
+    reused = {e['stage_id'] for e in warm if e['event'] == 'stage_outcome' and e['outcome'] == 'reused'}
+    assert reused == {'atlas.prepare', 'timetable.download', 'timetable.patterns', 'timetable.identities_routes'}
+    assert {e['stage_id'] for e in warm if e['event'] == 'stage_started'} == {'source_check.remote_sources', 'osm.download'}
     assert calls == {'atlas': 1, 'gtfs': 1, 'osm': 2}
     (tmp_path / 'data/processed/atlas_itineraries.csv').write_text('corrupted')
     third = refresh(tmp_path)
@@ -75,12 +85,16 @@ def test_atlas_change_reuses_gtfs_parsing_but_remaps_identities(tmp_path, source
     assert calls == {'atlas': 2, 'gtfs': 1, 'osm': 2}
 
 
-def test_successful_gtfs_checkpoint_survives_osm_failure(tmp_path, sources, monkeypatch):
+def test_successful_gtfs_checkpoint_survives_osm_failure(tmp_path, sources, monkeypatch, capsys):
     calls, _ = sources
     original = acquisition.query_overpass
     monkeypatch.setattr(acquisition, 'query_overpass', lambda **kw: (_ for _ in ()).throw(RuntimeError('offline')))
     with pytest.raises(RuntimeError, match='offline'):
         refresh(tmp_path)
+    events = public_events(capsys.readouterr().out)
+    assert events[-1]['stage_id'] == 'osm.download'
+    assert events[-1]['event'] == 'stage_failed'
+    assert not any(e['event'] == 'stage_failed' for e in events[:-1])
     monkeypatch.setattr(acquisition, 'query_overpass', original)
     assert refresh(tmp_path)['preprocessing_reused'] is True
     assert calls == {'atlas': 1, 'gtfs': 1, 'osm': 1}
@@ -102,14 +116,35 @@ def test_fixed_permalink_without_validator_does_not_establish_freshness():
     assert source_snapshot_is_unchanged(snapshot, snapshot) is False
 
 
-def test_corrupt_parsed_cache_reuses_verified_download(tmp_path, sources):
+def test_corrupt_parsed_cache_reuses_verified_download(tmp_path, sources, capsys):
     calls, _ = sources
     refresh(tmp_path)
+    capsys.readouterr()
     (tmp_path / 'data/cache/gtfs/trip_patterns.parquet').write_bytes(b'corrupt')
     result = refresh(tmp_path)
+    events = public_events(capsys.readouterr().out)
+    assert any(e['stage_id'] == 'timetable.download' and e['event'] == 'stage_outcome' and e['outcome'] == 'reused' for e in events)
+    assert any(e['stage_id'] == 'timetable.patterns' and e['event'] == 'stage_started' for e in events)
     assert result['cache_decisions']['gtfs'] == 'products_missing_or_changed'
     assert result['cache_decisions']['gtfs_source'] == 'hit'
     assert calls == {'atlas': 1, 'gtfs': 1, 'osm': 2}
+
+
+@pytest.mark.parametrize('local_feed', [False, True])
+def test_full_cli_plan_resolves_on_cold_and_warm_runs(tmp_path, sources, capsys, local_feed):
+    from transport_matcher.cli import main
+    feed = Path(__file__).resolve().parents[1] / 'examples/gtfs'
+    for run in ('cold', 'warm'):
+        args = ['swiss', '--workspace', str(tmp_path), '--download', '--output', str(tmp_path / run)]
+        if local_feed:
+            args += ['--gtfs', str(feed)]
+        main(args)
+        events = public_events(capsys.readouterr().out)
+        plan = {spec['id'] for spec in events[0]['stages']}
+        terminal = [e['stage_id'] for e in events if e['event'] in {'stage_finished', 'stage_outcome'}]
+        assert plan == set(terminal)
+        assert len(terminal) == len(plan)
+        assert not any(e['event'] == 'stage_failed' for e in events)
 
 
 def test_expired_atlas_validity_invalidates_even_when_validator_is_unchanged(tmp_path, sources, monkeypatch):

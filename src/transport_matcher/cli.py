@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from transport_matcher.timing import stage
+from transport_matcher.progress import progress_reporting, emit_progress_plan, progress_stage, run_progress_plan
 from pathlib import Path
 
 from transport_matcher.results import write_bundle
@@ -32,15 +32,10 @@ def main(argv=None):
         command.add_argument('--compression-level', type=int, choices=range(10), default=1,
                              help='Bundle gzip level, 0–9 (default: 1 for faster publication)')
     args = parser.parse_args(argv)
-    metadata = {}
     if args.command == "swiss":
-        from transport_matcher.integrations.swiss import run_matching
         workspace = args.workspace.resolve() if args.workspace else None
-        if args.download:
-            if workspace is None:
-                parser.error("--download requires --workspace")
-            from transport_matcher.integrations.swiss import refresh_swiss
-            metadata["acquisition"] = refresh_swiss(workspace, force=args.force)
+        if args.download and workspace is None:
+            parser.error("--download requires --workspace")
         if workspace:
             args.source = args.source or workspace / "data/raw/stops_ATLAS.csv"
             args.osm = args.osm or workspace / "data/raw/osm_data.xml"
@@ -49,14 +44,32 @@ def main(argv=None):
             args.boundary = args.boundary or (boundary if boundary.exists() else None)
         if not args.source or not args.osm:
             parser.error("swiss requires --source and --osm, or --workspace")
+    with progress_reporting():
+        emit_progress_plan(stages=run_progress_plan(
+            command=args.command, download=getattr(args, "download", False),
+            processed=getattr(args, "processed", None) is not None,
+            gtfs=getattr(args, "gtfs", None) is not None,
+        ))
+        _execute(args)
+
+
+def _execute(args):
+    metadata = {}
+    if args.command == "swiss":
+        from transport_matcher.integrations.swiss import run_matching
+        workspace = args.workspace.resolve() if args.workspace else None
+        if args.download:
+            from transport_matcher.integrations.swiss import refresh_swiss
+            metadata["acquisition"] = refresh_swiss(workspace, force=args.force)
+            args.boundary = args.boundary or workspace / "data/raw/switzerland.geojson"
         result = run_matching(args.source, args.osm, args.processed, args.gtfs, boundary_geojson=args.boundary)
     else:
         from transport_matcher.adapters.gtfs import run_gtfs
         result = run_gtfs(args.source, args.osm, namespace=args.namespace)
     from transport_matcher.statistics import compute_quality_metrics
-    with stage("bundle.quality_metrics"):
+    with progress_stage("bundle.metrics", timing_name="bundle.quality_metrics"):
         result.extensions["quality_metrics"] = compute_quality_metrics(result.matched, result.all_osm_nodes, result.osm_stop_units)
-    with stage('bundle.export_validate'):
+    with progress_stage("bundle.serialize", timing_name="bundle.export_validate"):
         path = write_bundle(result, args.output, metadata=metadata, compresslevel=args.compression_level)
     print(json.dumps({"event": "result_published", "path": str(path)}))
 

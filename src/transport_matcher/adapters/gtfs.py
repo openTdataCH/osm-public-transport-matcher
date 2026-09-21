@@ -181,24 +181,27 @@ def run_gtfs(gtfs_path: str | Path, osm_xml: str | Path, *, namespace: str, prof
     from transport_matcher.api import match
     from transport_matcher.core.route_state import RouteState
     from transport_matcher.profiles import MatchingProfile
+    from transport_matcher.progress import progress_stage
     from transport_matcher.routes import build_route_write_payload
     from .osm import read_osm
     from .osm_routes import process_osm_routes_data
-    adapter = read_gtfs(gtfs_path, namespace=namespace)
-    osm = read_osm(osm_xml, route_namespace=namespace)
+    with progress_stage('timetable.local_feed'):
+        adapter = read_gtfs(gtfs_path, namespace=namespace)
     profile = profile or MatchingProfile(profile_id=f'gtfs:{namespace}', capabilities=('stops', 'problems', 'routes'))
-    osm_products = process_osm_routes_data(Path(osm_xml).read_text(encoding='utf-8'), out_dir=None)
-    for key in ('osm_route_masters', 'osm_route_relations'):
-        frame = osm_products[key]
-        frame['gtfs_route_id'] = frame['gtfs_route_id'].map(lambda value: f'{namespace}:route:{value}' if value else None)
-        frame['route_id_normalized'] = frame['gtfs_route_id']
-    adapter.route_data.update(osm_products)
-    source_families = adapter.route_data.get('source_line_families', pd.DataFrame())
-    route_state = RouteState.from_records(
-        [{'route_id': row['source_family_id'], 'route_id_normalized': row.get('route_id_normalized')}
-         for row in source_families.to_dict('records')],
-        adapter.route_data['osm_route_relations'].to_dict('records'),
-    )
+    with progress_stage('osm.prepare'):
+        osm = read_osm(osm_xml, route_namespace=namespace)
+        osm_products = process_osm_routes_data(Path(osm_xml).read_text(encoding='utf-8'), out_dir=None)
+        for key in ('osm_route_masters', 'osm_route_relations'):
+            frame = osm_products[key]
+            frame['gtfs_route_id'] = frame['gtfs_route_id'].map(lambda value: f'{namespace}:route:{value}' if value else None)
+            frame['route_id_normalized'] = frame['gtfs_route_id']
+        adapter.route_data.update(osm_products)
+        source_families = adapter.route_data.get('source_line_families', pd.DataFrame())
+        route_state = RouteState.from_records(
+            [{'route_id': row['source_family_id'], 'route_id_normalized': row.get('route_id_normalized')}
+             for row in source_families.to_dict('records')],
+            adapter.route_data['osm_route_relations'].to_dict('records'),
+        )
     output = match(adapter.source, osm, profile, route_evidence={'route_state': route_state})
     output.diagnostics.extend(unresolved_osm_member_diagnostics(osm_products))
     output.routes = build_route_write_payload(
@@ -208,10 +211,11 @@ def run_gtfs(gtfs_path: str | Path, osm_xml: str | Path, *, namespace: str, prof
     )
     output.extensions.update(adapter.extensions)
     output.metadata.update(adapter.metadata)
-    capabilities = [cap for cap in output.metadata.get('capabilities', []) if cap != 'routes']
-    if output.routes.get('line_families'):
-        capabilities.append('routes')
-    output.metadata['capabilities'] = capabilities
-    output.metadata['inputs'].append(fingerprint(osm_xml))
-    output.metadata['attribution'] = {'source': 'GTFS feed supplied by caller', 'osm': '© OpenStreetMap contributors, ODbL'}
+    with progress_stage('bundle.fingerprints'):
+        capabilities = [cap for cap in output.metadata.get('capabilities', []) if cap != 'routes']
+        if output.routes.get('line_families'):
+            capabilities.append('routes')
+        output.metadata['capabilities'] = capabilities
+        output.metadata['inputs'].append(fingerprint(osm_xml))
+        output.metadata['attribution'] = {'source': 'GTFS feed supplied by caller', 'osm': '© OpenStreetMap contributors, ODbL'}
     return output

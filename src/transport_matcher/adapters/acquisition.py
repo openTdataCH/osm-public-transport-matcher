@@ -10,6 +10,7 @@ from tempfile import TemporaryDirectory
 
 import pandas as pd
 from transport_matcher.timing import stage
+from transport_matcher.progress import emit_stage_outcome, progress_stage
 
 from .get_atlas_data import ATLAS_ACTUAL_DATE_RESOURCE_PERMALINK, get_atlas_stops, get_current_gtfs_permalink
 from .get_atlas_gtfs import download_and_extract_gtfs
@@ -100,14 +101,14 @@ def refresh_swiss(
     except (FileNotFoundError, json.JSONDecodeError):
         previous = {}
     gtfs_url = gtfs_url or get_current_gtfs_permalink()
-    with stage('acquisition.source_probes'):
+    with progress_stage('source_check.remote_sources', timing_name='acquisition.source_probes'):
         snapshots = {
             'atlas': probe_remote_source('ATLAS', atlas_url),
             'gtfs': probe_remote_source('GTFS', gtfs_url),
         }
-    boundary = raw / 'switzerland.geojson'
-    _ensure_swiss_geojson_cache(str(boundary), download_url=boundary_url)
-    boundary_fingerprint = _sha256(boundary)
+        boundary = raw / 'switzerland.geojson'
+        _ensure_swiss_geojson_cache(str(boundary), download_url=boundary_url)
+        boundary_fingerprint = _sha256(boundary)
     from transport_matcher.swiss import _load_gtfs_products, _map_gtfs_products
     from .gtfs_columnar import CACHE_VERSION, read_cache, write_cache
     stages = dict(previous.get('stages', {})) if previous.get('cache_version') == 2 else {}
@@ -133,8 +134,11 @@ def refresh_swiss(
     with TemporaryDirectory(prefix='.acquisition-', dir=data_dir) as staging_name:
         staging = Path(staging_name)
         atlas_inputs = {'boundary': boundary_fingerprint, 'version': 1}
-        if not decide('atlas', atlas_inputs, snapshots['atlas']):
-            with stage('acquisition.atlas'):
+        atlas_reused = decide('atlas', atlas_inputs, snapshots['atlas'])
+        if atlas_reused:
+            emit_stage_outcome('atlas.prepare', 'reused')
+        else:
+            with progress_stage('atlas.prepare', timing_name='acquisition.atlas'):
                 atlas_path = staging / 'stops_ATLAS.csv'
                 metadata['atlas_filtering'] = get_atlas_stops(atlas_path, atlas_url, boundary_geojson=boundary)
                 os.replace(atlas_path, raw / 'stops_ATLAS.csv')
@@ -143,10 +147,17 @@ def refresh_swiss(
         gtfs_inputs = {'boundary': boundary_fingerprint, 'version': CACHE_VERSION, 'backend': backend}
         cache_dir = data_dir / 'cache' / 'gtfs'
         prepared_gtfs = None
-        if not decide('gtfs', gtfs_inputs, snapshots['gtfs']):
+        gtfs_reused = decide('gtfs', gtfs_inputs, snapshots['gtfs'])
+        if gtfs_reused:
+            emit_stage_outcome('timetable.download', 'reused')
+            emit_stage_outcome('timetable.patterns', 'reused')
+        else:
             source_inputs = {'version': 1}
-            if not decide('gtfs_source', source_inputs, snapshots['gtfs']):
-                with stage('acquisition.gtfs_download_extract'):
+            gtfs_source_reused = decide('gtfs_source', source_inputs, snapshots['gtfs'])
+            if gtfs_source_reused:
+                emit_stage_outcome('timetable.download', 'reused')
+            else:
+                with progress_stage('timetable.download', timing_name='acquisition.gtfs_download_extract'):
                     gtfs_folder = Path(download_and_extract_gtfs(gtfs_url, str(staging / 'gtfs')))
                     target = raw / 'gtfs'
                     target.mkdir(exist_ok=True)
@@ -155,48 +166,52 @@ def refresh_swiss(
                     checkpoint('gtfs_source', source_inputs,
                                [target / name for name in ('stops.txt', 'trips.txt', 'routes.txt', 'stop_times.txt')], snapshots['gtfs'])
             # Large working tables stay on the container temporary filesystem.
-            with TemporaryDirectory(prefix='transport-matcher-gtfs-') as scratch:
-                gtfs = _load_gtfs_products(raw / 'gtfs', boundary, scratch)
-                pending = staging / 'gtfs_cache'
-                with stage('gtfs.cache_write'):
-                    write_cache(gtfs, pending)
-                    cache_dir.mkdir(parents=True, exist_ok=True)
-                    products = list(pending.iterdir())
-                    for product in products:
-                        os.replace(product, cache_dir / product.name)
-                    checkpoint('gtfs', gtfs_inputs, [cache_dir / product.name for product in products], snapshots['gtfs'])
-                    # Reuse in-memory metadata on a fresh run; only the pattern
-                    # path must move out of scratch before it is removed.
-                    if gtfs.get('trip_patterns_path'):
-                        gtfs['trip_patterns_path'] = str(cache_dir / 'trip_patterns.parquet')
-                    if gtfs.get('trip_stop_times_path'):
-                        gtfs['trip_stop_times_path'] = str(cache_dir / 'trip_stop_times.csv')
-                    prepared_gtfs = gtfs
+            with progress_stage('timetable.patterns', timing_name='gtfs.prepare_patterns'):
+                with TemporaryDirectory(prefix='transport-matcher-gtfs-') as scratch:
+                    gtfs = _load_gtfs_products(raw / 'gtfs', boundary, scratch)
+                    pending = staging / 'gtfs_cache'
+                    with stage('gtfs.cache_write'):
+                        write_cache(gtfs, pending)
+                        cache_dir.mkdir(parents=True, exist_ok=True)
+                        products = list(pending.iterdir())
+                        for product in products:
+                            os.replace(product, cache_dir / product.name)
+                        checkpoint('gtfs', gtfs_inputs, [cache_dir / product.name for product in products], snapshots['gtfs'])
+                        # Reuse in-memory metadata on a fresh run; only the pattern
+                        # path must move out of scratch before it is removed.
+                        if gtfs.get('trip_patterns_path'):
+                            gtfs['trip_patterns_path'] = str(cache_dir / 'trip_patterns.parquet')
+                        if gtfs.get('trip_stop_times_path'):
+                            gtfs['trip_stop_times_path'] = str(cache_dir / 'trip_stop_times.csv')
+                        prepared_gtfs = gtfs
 
         mapping_inputs = {'atlas': stages['atlas']['files'], 'gtfs': stages['gtfs']['files'], 'version': 1}
         mapping_reused = decide('gtfs_atlas', mapping_inputs)
-        if not mapping_reused:
-            if prepared_gtfs is None:
-                with stage('gtfs.cache_read'):
-                    prepared_gtfs = read_cache(cache_dir)
-            traffic_points = pd.read_csv(raw / 'stops_ATLAS.csv', sep=';', dtype=str)
-            route_data, stops, identities, mapping_stats = _map_gtfs_products(prepared_gtfs, traffic_points)
-            with stage('gtfs.write_products'):
-                for key, frame in route_data.items():
-                    frame.to_csv(staging / f'{key}.csv', index=False)
-                pd.DataFrame(stops).to_csv(staging / 'gtfs_stops_raw.csv', index=False)
-                identity_frame = pd.DataFrame(identities)
-                if 'details_json' in identity_frame:
-                    identity_frame['details_json'] = identity_frame['details_json'].map(json.dumps)
-                identity_frame.to_csv(staging / 'gtfs_stop_identity_resolution.csv', index=False)
-                for relative in _CACHE_FILES[1:]:
-                    destination = data_dir / relative
-                    os.replace(staging / destination.name, destination)
-                metadata['gtfs_atlas_statistics'] = mapping_stats
-                checkpoint('gtfs_atlas', mapping_inputs, [data_dir / relative for relative in _CACHE_FILES[1:]])
+        if mapping_reused:
+            emit_stage_outcome('timetable.identities_routes', 'reused')
+        else:
+            with progress_stage('timetable.identities_routes', timing_name='gtfs.identities_and_routes'):
+                if prepared_gtfs is None:
+                    with stage('gtfs.cache_read'):
+                        prepared_gtfs = read_cache(cache_dir)
+                traffic_points = pd.read_csv(raw / 'stops_ATLAS.csv', sep=';', dtype=str)
+                route_data, stops, identities, mapping_stats = _map_gtfs_products(prepared_gtfs, traffic_points)
+                with stage('gtfs.write_products'):
+                    for key, frame in route_data.items():
+                        frame.to_csv(staging / f'{key}.csv', index=False)
+                    pd.DataFrame(stops).to_csv(staging / 'gtfs_stops_raw.csv', index=False)
+                    identity_frame = pd.DataFrame(identities)
+                    if 'details_json' in identity_frame:
+                        identity_frame['details_json'] = identity_frame['details_json'].map(json.dumps)
+                    identity_frame.to_csv(staging / 'gtfs_stop_identity_resolution.csv', index=False)
+                    for relative in _CACHE_FILES[1:]:
+                        destination = data_dir / relative
+                        os.replace(staging / destination.name, destination)
+                    metadata['gtfs_atlas_statistics'] = mapping_stats
+                    checkpoint('gtfs_atlas', mapping_inputs, [data_dir / relative for relative in _CACHE_FILES[1:]])
         prepared_gtfs = None
         gtfs = None
-        with stage('acquisition.osm'):
+        with progress_stage('osm.download', timing_name='acquisition.osm'):
             query_overpass(output_path=str(staging / 'osm_data.xml'), overpass_url=overpass_url)
             os.replace(staging / 'osm_data.xml', raw / 'osm_data.xml')
         # Route products are derived once by run_matching from this exact XML.

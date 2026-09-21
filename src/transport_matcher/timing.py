@@ -24,10 +24,14 @@ def stage(name, **details):
     worker.start()
     try:
         yield
-    except BaseException:
-        emit("stage_failed", cpu_seconds=round(time.process_time() - cpu, 3))
+    except BaseException as exc:
+        done.set()
+        worker.join()
+        emit("stage_failed", cpu_seconds=round(time.process_time() - cpu, 3), error=str(exc))
         raise
     else:
+        done.set()
+        worker.join()
         emit("stage_finished", cpu_seconds=round(time.process_time() - cpu, 3))
     finally:
         done.set()

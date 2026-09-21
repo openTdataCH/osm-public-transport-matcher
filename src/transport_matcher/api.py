@@ -17,6 +17,7 @@ from .core.problem_detection.context import ProblemContext
 from .core.problem_detection.pipeline import STOP_PROBLEM_PIPELINE
 from .core.utils.common import haversine_distance
 from .profiles import MatchingProfile
+from .progress import progress_stage
 
 
 def _predicates(profile):
@@ -40,7 +41,24 @@ def _predicates(profile):
     unknown = set(profile.predicate_names) - factories.keys()
     if unknown:
         raise ValueError(f'Unknown predicates: {sorted(unknown)}')
-    return [factories[name]() for name in profile.predicate_names]
+    progress_stages = {
+        'trio': 'stop_matching.trio',
+        'exact': 'stop_matching.exact',
+        'name': 'stop_matching.name',
+        'route': 'stop_matching.routes',
+        'group_proximity': 'stop_matching.proximity',
+        'long_distance_group_proximity': 'stop_matching.proximity',
+        'local_ref': 'stop_matching.proximity',
+        'nearest_single': 'stop_matching.proximity',
+        'nearest_ratio': 'stop_matching.proximity',
+        'nearest_second': 'stop_matching.proximity',
+    }
+    predicates = []
+    for name in profile.predicate_names:
+        predicate = factories[name]()
+        predicate.progress_stage_id = progress_stages[name]
+        predicates.append(predicate)
+    return predicates
 
 
 def _build_groups(source, osm, profile):
@@ -165,7 +183,8 @@ def match(source, osm, profile=None, route_evidence=None):
         osm = OsmState.from_records(osm, node_routes=route_evidence.get('osm'), station_ref_tag=profile.osm_station_ref_tag,
                                     preserve_name_alias_multiplicity=profile.preserve_name_alias_multiplicity)
     route_state = route_evidence.get('route_state') or RouteState()
-    _build_groups(source, osm, profile)
+    with progress_stage('stop_matching.groups'):
+        _build_groups(source, osm, profile)
     ctx = MatchingContext(source=source, osm=osm, max_distance=profile.max_distance,
                           profile=profile, route_state=route_state)
     result = run_pipeline(_predicates(profile), ctx)
@@ -182,7 +201,8 @@ def match(source, osm, profile=None, route_evidence=None):
     if not (has_source_routes and has_osm_routes):
         output.diagnostics.append({'code': 'route_evidence_unavailable', 'stage': 'route_matching',
                                    'reason': 'Source or OSM route evidence is absent; route-dependent checks skipped.'})
-    _detect(output, profile, route_state)
+    with progress_stage('stop_matching.problems'):
+        _detect(output, profile, route_state)
     output.metadata = {
         'profile': asdict(profile),
         'capabilities': [cap for cap in profile.capabilities if cap != 'routes' or (has_source_routes and has_osm_routes)],

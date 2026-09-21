@@ -9,6 +9,7 @@ from pathlib import Path
 import pandas as pd
 
 from transport_matcher.api import match
+from transport_matcher.progress import progress_stage
 from transport_matcher.core.models import MatchingOutput
 from transport_matcher.core.route_state import RouteState
 from transport_matcher.profiles import SWITZERLAND
@@ -103,41 +104,48 @@ def run_matching(
     Neither matching nor boundary selection downloads data.
     """
     atlas_path, osm_path = Path(atlas_csv), Path(osm_xml)
-    traffic_points = pd.read_csv(atlas_path, sep=';', dtype=str)
-    records = atlas_records(traffic_points)
-    route_data = load_all_route_data(processed_dir, source_only=True) if processed_dir is not None else {}
-    stop_rows, identity_rows = read_gtfs_identity_cache(processed_dir) if processed_dir is not None else ([], [])
+    with progress_stage('atlas.load'):
+        traffic_points = pd.read_csv(atlas_path, sep=';', dtype=str)
+        records = atlas_records(traffic_points)
+    route_data = {}
+    stop_rows, identity_rows = [], []
     source_metadata = {}
     input_paths = [atlas_path, osm_path]
     if processed_dir is not None:
-        processed_path = Path(processed_dir)
-        input_paths.extend(sorted(path for path in processed_path.glob('*.csv')
-                                  if path.is_file() and (path.name.startswith('atlas_') or path.name.startswith('gtfs_'))))
-        meta_path = processed_path.parent / 'source_metadata.json'
-        if meta_path.exists():
-            source_metadata = json.loads(meta_path.read_text(encoding='utf-8'))
-            input_paths.append(meta_path)
-        stats_path = processed_path.parent / 'gtfs_atlas_stats.json'
-        if stats_path.exists() and 'gtfs_atlas_statistics' not in source_metadata:
-            source_metadata['gtfs_atlas_statistics'] = json.loads(stats_path.read_text(encoding='utf-8'))
-            input_paths.append(stats_path)
+        with progress_stage('timetable.load'):
+            if gtfs_dir is None:
+                route_data = load_all_route_data(processed_dir, source_only=True)
+                stop_rows, identity_rows = read_gtfs_identity_cache(processed_dir)
+            processed_path = Path(processed_dir)
+            input_paths.extend(sorted(path for path in processed_path.glob('*.csv')
+                                      if path.is_file() and (path.name.startswith('atlas_') or path.name.startswith('gtfs_'))))
+            meta_path = processed_path.parent / 'source_metadata.json'
+            if meta_path.exists():
+                source_metadata = json.loads(meta_path.read_text(encoding='utf-8'))
+                input_paths.append(meta_path)
+            stats_path = processed_path.parent / 'gtfs_atlas_stats.json'
+            if stats_path.exists() and 'gtfs_atlas_statistics' not in source_metadata:
+                source_metadata['gtfs_atlas_statistics'] = json.loads(stats_path.read_text(encoding='utf-8'))
+                input_paths.append(stats_path)
     gtfs_stats = source_metadata.get('gtfs_atlas_statistics', {})
     if gtfs_dir is not None:
-        source_products, stop_rows, identity_rows, gtfs_stats = _fresh_gtfs_products(gtfs_dir, traffic_points, boundary_geojson)
-        route_data.update(source_products)
-    with stage('osm.route_products'):
-        route_data.update(process_osm_routes_data(osm_path.read_text(encoding='utf-8'), out_dir=None))
-    for key in ('osm_route_masters', 'osm_route_relations'):
-        if key in route_data and 'gtfs_route_id' in route_data[key]:
-            route_data[key]['route_id_normalized'] = route_data[key]['gtfs_route_id'].map(normalize_route_id)
-    source = atlas_state(records, route_data)
-    with stage('osm.stops_and_evidence'):
-        osm = read_osm(osm_path, route_id_normalizer=normalize_route_id)
-    route_state = RouteState.from_records(
-        [{'route_id': row['atlas_line_id'], 'route_id_normalized': row.get('route_id_normalized')}
-         for row in route_data.get('atlas_line_families', pd.DataFrame()).to_dict('records')],
-        route_data.get('osm_route_relations', pd.DataFrame()).to_dict('records'),
-    )
+        with progress_stage('timetable.local_feed'):
+            source_products, stop_rows, identity_rows, gtfs_stats = _fresh_gtfs_products(gtfs_dir, traffic_points, boundary_geojson)
+            route_data.update(source_products)
+    with progress_stage('osm.prepare', timing_name='osm.prepare'):
+        with stage('osm.route_products'):
+            route_data.update(process_osm_routes_data(osm_path.read_text(encoding='utf-8'), out_dir=None))
+        for key in ('osm_route_masters', 'osm_route_relations'):
+            if key in route_data and 'gtfs_route_id' in route_data[key]:
+                route_data[key]['route_id_normalized'] = route_data[key]['gtfs_route_id'].map(normalize_route_id)
+        source = atlas_state(records, route_data)
+        with stage('osm.stops_and_evidence'):
+            osm = read_osm(osm_path, route_id_normalizer=normalize_route_id)
+        route_state = RouteState.from_records(
+            [{'route_id': row['atlas_line_id'], 'route_id_normalized': row.get('route_id_normalized')}
+             for row in route_data.get('atlas_line_families', pd.DataFrame()).to_dict('records')],
+            route_data.get('osm_route_relations', pd.DataFrame()).to_dict('records'),
+        )
     with stage('matching.stops_and_problems'):
         output = match(source, osm, SWITZERLAND, route_evidence={'route_state': route_state})
     output.diagnostics.extend(unresolved_osm_member_diagnostics(route_data))
@@ -160,7 +168,7 @@ def run_matching(
     if stop_rows and 'gtfs_identity' not in capabilities:
         capabilities.append('gtfs_identity')
     output.metadata['capabilities'] = capabilities
-    with stage('matching.fingerprints'):
+    with progress_stage('bundle.fingerprints', timing_name='matching.fingerprints'):
         output.metadata.update({
             'source': 'ATLAS', 'namespace': 'atlas',
             'inputs': [fingerprint(path) for path in input_paths],

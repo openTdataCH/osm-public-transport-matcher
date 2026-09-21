@@ -5,6 +5,8 @@ Defines MatchingContext (shared state), PipelineOutput, the sequential runner,
 and the make_match() helper used by all predicates.
 """
 from dataclasses import dataclass, field
+from contextlib import nullcontext
+from itertools import groupby
 import logging
 from typing import TYPE_CHECKING
 from transport_matcher.profiles import MatchingProfile
@@ -12,6 +14,7 @@ from transport_matcher.core.route_state import RouteState
 
 from transport_matcher.core.utils.common import haversine_distance
 from transport_matcher.core.models import MatchRecord, PipelineResult
+from transport_matcher.progress import progress_stage, validate_stage_order
 
 if TYPE_CHECKING:
     from transport_matcher.core.state import SourceState, OsmState
@@ -133,25 +136,33 @@ def run_pipeline(predicates: list['BasePredicate'], ctx: MatchingContext) -> 'Pi
     """
     Run *predicates* sequentially.
     """
-    for predicate in predicates:
-        unmatched = ctx.source.get_unmatched_records()
+    validate_stage_order(getattr(predicate, 'progress_stage_id', None) for predicate in predicates)
+    for public_stage_id, grouped in groupby(
+        predicates,
+        key=lambda predicate: getattr(predicate, 'progress_stage_id', None),
+    ):
+        context = progress_stage(public_stage_id) if public_stage_id else nullcontext()
+        with context:
+            for predicate in grouped:
+                unmatched = ctx.source.get_unmatched_records()
 
-        logger.info(
-            f"  Running {predicate.name} "
-            f"({len(unmatched)} unmatched source entries)…"
-        )
+                logger.info(
+                    f"  Running {predicate.name} "
+                    f"({len(unmatched)} unmatched source entries)…"
+                )
 
-        matches_before = len(ctx.all_matches)
-        
-        # The predicate algorithm directly interacts with ctx.commit(...) now
-        predicate.run(ctx)
+                matches_before = len(ctx.all_matches)
 
-        matches_after = len(ctx.all_matches)
-        logger.info(f"    → {predicate.name}: {matches_after - matches_before} matches")
+                # The predicate algorithm directly interacts with ctx.commit(...) now
+                predicate.run(ctx)
+
+                matches_after = len(ctx.all_matches)
+                logger.info(f"    → {predicate.name}: {matches_after - matches_before} matches")
 
     # ----- Build output -----
-    unmatched_source = ctx.source.get_unmatched_nodes()
-    unmatched_osm = ctx.osm.get_unmatched_nodes()
+    with progress_stage('stop_matching.unmatched'):
+        unmatched_source = ctx.source.get_unmatched_nodes()
+        unmatched_osm = ctx.osm.get_unmatched_nodes()
 
     return PipelineResult(
         matched=ctx.all_matches,
