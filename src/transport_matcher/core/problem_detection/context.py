@@ -15,10 +15,10 @@ from typing import Optional
 from typing import TYPE_CHECKING
 
 from scipy.spatial import KDTree
-from transport_matcher.profiles import MatchingProfile
+from transport_matcher.core.profile import MatchingProfile
 from transport_matcher.core.route_state import RouteState
 
-from transport_matcher.core.utils.spatial_index import to_xyz, batch_to_xyz, meters_to_unit_chord_radius
+from transport_matcher.core.utils.spatial_index import to_xyz, batch_to_xyz
 
 logger = logging.getLogger(__name__)
 

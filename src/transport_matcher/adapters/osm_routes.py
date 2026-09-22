@@ -187,7 +187,6 @@ def process_osm_routes_data(xml_data, out_dir="data/processed/"):
         relation_id = relation.get('id')
         route_master_id = route_master_by_relation.get(relation_id)
         gtfs_route_id = tags.get('gtfs:route_id', '')
-        relation_version = relation.get('version', '')
         synthetic_family_key = _build_synthetic_family_key(gtfs_route_id, tags.get('ref'), relation_id, route_master_id)
         family_origin = 'route_master' if route_master_id else 'relation'
         

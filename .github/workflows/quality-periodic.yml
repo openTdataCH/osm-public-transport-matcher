@@ -1,0 +1,39 @@
+name: Periodic engine quality
+
+on:
+  schedule:
+    - cron: "19 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mutation-sample:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install '.[test,quality,mutation]'
+      - run: make quality-mutation PYTHON=python
+      - name: Preserve mutation evidence and survivors
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-mutation-sample
+          path: |
+            quality/raw/engine-mutation.*
+      - name: Publish visible status
+        if: always()
+        run: |
+          echo "## Engine result validation mutation sample" >> "$GITHUB_STEP_SUMMARY"
+          echo "Owner: engine maintainers. Review surviving or untested mutants in the artifact; no score is inferred for unrun mutations." >> "$GITHUB_STEP_SUMMARY"
+          if [ -f quality/raw/engine-mutation.txt ]; then
+            cat quality/raw/engine-mutation.txt >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Mutation evidence unavailable: inspect the failed step." >> "$GITHUB_STEP_SUMMARY"
+          fi

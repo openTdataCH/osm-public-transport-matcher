@@ -707,7 +707,6 @@ def build_gtfs_db_payload_rows(
             'stop_lon': stop_lon,
         })
 
-    gtfs_stop_lookup = {row['stop_id']: row for row in gtfs_stop_rows}
     atlas_coords = traffic_points[['sloid', 'number']].copy()
     atlas_coords['atlas_lat'] = pd.to_numeric(traffic_points.get('wgs84North'), errors='coerce')
     atlas_coords['atlas_lon'] = pd.to_numeric(traffic_points.get('wgs84East'), errors='coerce')

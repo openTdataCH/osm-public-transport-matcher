@@ -43,7 +43,6 @@ def test_align_stop_sequences_counts_variant_sloid_matches_and_keeps_order():
             'source_sloid': 'ch:1:sloid:C:1',
             'source_sloid_variants': None,
             'canonical_stop_key': 'ch:1:sloid:C:1',
-            'source_sloid': 'ch:1:sloid:C:1',
             'uic_ref': '8500003',
         },
     ]

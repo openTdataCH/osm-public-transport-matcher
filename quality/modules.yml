@@ -1,0 +1,235 @@
+{
+  "schema_version": 1,
+  "repository": "engine",
+  "source_roots": [
+    "src",
+    "scripts",
+    ".github",
+    "quality",
+    "benchmarks"
+  ],
+  "exclusions": [
+    {
+      "pattern": "src/**/*.egg-info/**",
+      "reason": "Generated Python package metadata"
+    },
+    {
+      "pattern": "src/**/__pycache__/**",
+      "reason": "Generated Python bytecode"
+    },
+    {
+      "pattern": "tests/**",
+      "reason": "Test evidence is associated through paths.tests rather than production ownership"
+    },
+    {
+      "pattern": "examples/**",
+      "reason": "Example datasets and expected fixture outputs"
+    },
+    {
+      "pattern": "documentation/benchmarks/**",
+      "reason": "Historical generated performance measurements"
+    },
+    {
+      "pattern": "quality/raw/**",
+      "reason": "Generated analyzer evidence"
+    },
+    {
+      "pattern": "**/__pycache__/**",
+      "reason": "Generated Python bytecode"
+    },
+    {
+      "pattern": "results/**",
+      "reason": "Generated result bundles"
+    }
+  ],
+  "modules": [
+    {
+      "id": "engine.core-matching",
+      "title": "Source-neutral matching and problem detection",
+      "owner": "Engine maintainers",
+      "reviewed": "2026-09-22",
+      "criticality": "critical",
+      "responsibility": "Allocate normalized source and OSM entities using explicit policies, compare routes, and identify matching problems.",
+      "paths": {
+        "source": [
+          "src/transport_matcher/core/**/*.py",
+          "src/transport_matcher/api.py",
+          "src/transport_matcher/routes.py",
+          "src/transport_matcher/statistics.py",
+          "src/transport_matcher/timing.py",
+          "src/transport_matcher/progress.py"
+        ],
+        "tests": [
+          "tests/test_api.py",
+          "tests/test_matching_regressions.py",
+          "tests/test_routes.py",
+          "tests/test_route_assignment_scale.py",
+          "tests/test_progress.py",
+          "tests/test_quality_properties.py",
+          "tests/test_architecture.py"
+        ]
+      },
+      "entrypoints": [
+        "transport_matcher.api:match"
+      ],
+      "contracts": {
+        "produces": [
+          "normalized-matching-output"
+        ],
+        "consumes": [
+          "normalized-source-and-osm-records"
+        ],
+        "database": []
+      },
+      "invariants": [
+        "Core never reads acquisition data or imports dataset profiles, integrations, result serialization, or the review application.",
+        "Matching partitions input entities into matched and unmatched records without inventing identities.",
+        "Distance allocation never reuses a candidate and respects its configured distance cap.",
+        "Progress phases obey the documented lifecycle."
+      ],
+      "docs": {
+        "explanation": [
+          "documentation/2. Matching process.md",
+          "documentation/4. Problems.md"
+        ],
+        "reference": [
+          "CONTRIBUTING.md",
+          "documentation/5.3 Pipeline Progress Contract.md"
+        ],
+        "operations": [],
+        "decision": [
+          "quality/README.md"
+        ]
+      },
+      "dependencies": []
+    },
+    {
+      "id": "engine.integrations",
+      "title": "Acquisition, adapters, and dataset profiles",
+      "owner": "Engine maintainers",
+      "reviewed": "2026-09-22",
+      "criticality": "high",
+      "responsibility": "Acquire, normalize, and cache external data with explicit dataset-specific policies and provenance.",
+      "paths": {
+        "source": [
+          "src/transport_matcher/acquisition/**/*.py",
+          "src/transport_matcher/adapters/**/*.py",
+          "src/transport_matcher/integrations/**/*.py",
+          "src/transport_matcher/profiles/**/*.py",
+          "src/transport_matcher/swiss.py",
+          "benchmarks/**/*.py"
+        ],
+        "tests": [
+          "tests/test_adapters*.py",
+          "tests/test_gtfs_columnar.py"
+        ]
+      },
+      "entrypoints": [
+        "transport_matcher.adapters.gtfs:run_gtfs",
+        "transport_matcher.swiss:run_matching"
+      ],
+      "contracts": {
+        "produces": [
+          "normalized-source-and-osm-records"
+        ],
+        "consumes": [
+          "gtfs",
+          "osm",
+          "atlas"
+        ],
+        "database": []
+      },
+      "invariants": [
+        "Source identities retain their dataset namespace.",
+        "Acquisition dependencies remain optional for core consumers.",
+        "Cache reuse requires matching source and processing fingerprints."
+      ],
+      "docs": {
+        "explanation": [
+          "documentation/1. Download and process data.md"
+        ],
+        "reference": [
+          "CONTRIBUTING.md"
+        ],
+        "operations": [
+          "documentation/5. Operations and performance.md"
+        ],
+        "decision": []
+      },
+      "dependencies": [
+        "engine.core-matching"
+      ]
+    },
+    {
+      "id": "engine.result-producer",
+      "title": "Result contract and CLI publication",
+      "owner": "Engine maintainers",
+      "reviewed": "2026-09-22",
+      "criticality": "critical",
+      "responsibility": "Validate and atomically publish versioned bundles, expose the public API and CLI, and maintain engine quality and deployment tooling.",
+      "paths": {
+        "source": [
+          "src/transport_matcher/results/**/*.py",
+          "src/transport_matcher/__init__.py",
+          "src/transport_matcher/__main__.py",
+          "src/transport_matcher/cli.py",
+          ".github/**/*.yml",
+          "quality/**/*.py",
+          "quality/**/*.json",
+          "quality/**/*.yml",
+          "pyproject.toml",
+          "Makefile",
+          "Dockerfile"
+        ],
+        "tests": [
+          "tests/test_results.py",
+          "tests/test_quality_properties.py",
+          "tests/test_architecture.py"
+        ]
+      },
+      "entrypoints": [
+        "transport_matcher.results:write_bundle",
+        "transport_matcher.results:validate_bundle",
+        "transport_matcher.cli:main"
+      ],
+      "contracts": {
+        "produces": [
+          "result-bundle-v1"
+        ],
+        "consumes": [
+          "normalized-matching-output"
+        ],
+        "database": []
+      },
+      "invariants": [
+        "Invalid or incomplete output never publishes a result directory.",
+        "Existing result directories are never overwritten.",
+        "Bundle checksums, counts, identities, and relationships are independently validated.",
+        "The engine never imports the review application."
+      ],
+      "docs": {
+        "explanation": [
+          "README.md"
+        ],
+        "reference": [
+          "RESULT_FORMAT.md"
+        ],
+        "operations": [
+          "quality/README.md"
+        ],
+        "decision": [
+          "quality/README.md"
+        ]
+      },
+      "dependencies": [
+        "engine.core-matching",
+        "engine.integrations"
+      ]
+    }
+  ],
+  "source_files": [
+    "pyproject.toml",
+    "Makefile",
+    "Dockerfile"
+  ]
+}

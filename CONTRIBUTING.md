@@ -1,13 +1,59 @@
 # Contributing to Transport Matcher
 
-Install the engine in editable mode and run a small example before changing a rule:
+Install the engine in editable mode and run the supported checks before changing a rule:
 
 ```bash
-python -m pip install -e '.[test,gtfs,swiss,acquisition]'
-python -m pytest tests
+python3.13 -m venv .venv
+.venv/bin/python -m pip install -e '.[test,quality,gtfs,swiss,acquisition]'
+make quality PYTHON=.venv/bin/python
 ```
 
+Use `make quality-fast PYTHON=.venv/bin/python` while editing. The full command
+matches CI and produces branch coverage and test reports. See
+[quality evidence](quality/README.md) for the module catalog, dependency rules,
+raw artifacts, and optional mutation sample.
+
 For only the core, install `.[test]` and run `tests/test_api.py`, `tests/test_matching_regressions.py` and `tests/test_results.py`. Those tests use normalized records, do not import adapters and need no network, database or review application.
+
+## Quality workflow for a change
+
+Before editing, identify the responsibility in [the module catalog](quality/modules.yml):
+source-neutral matching, external-data integrations, or result production and
+engine tooling. Preserve its named invariants and update the source/test/docs
+associations when adding or moving files. Ownership discovery includes new
+nonignored files outside the usual directories; an unowned script is an error.
+
+During development, run the affected regression tests and
+`make quality-fast PYTHON=.venv/bin/python`. Before handing off an engine change,
+run `make quality PYTHON=.venv/bin/python` and inspect any failure or skipped case in the JUnit
+report, along with newly uncovered branches. The full command produces
+`quality/raw/engine-tests.xml` and branch coverage JSON/XML. Record what ran and
+its limitations; raw percentages do not replace negative and failure-path tests.
+
+Use [the bounded mutation sample](quality/README.md#mutation-scope-provenance-and-surviving-mutants)
+when changing coordinate validation, and select the full configured validator
+when broader result-validation behavior changes. A surviving mutation calls for
+inspection or a stronger behavioral test. The current sample is advisory, so a
+zero process exit does not by itself mean all mutations were killed.
+
+Generic policy types belong in `core/profile.py`; the existing imports through
+`transport_matcher` and `transport_matcher.profiles` remain compatible aliases.
+Keep acquisition, dataset profiles, integration composition, and result I/O out
+of the core layer. Static import checks enforce those boundaries; review remains
+necessary for dynamic imports and runtime effects.
+
+For a result-format or producer/consumer change, update [the wire reference](RESULT_FORMAT.md),
+the relevant fixtures, and both sides' compatibility tests. From the sibling app
+checkout, run `make quality ENGINE_ROOT=../engine` to include independent consumer
+validation and PostGIS publication checks. The engine's own command cannot
+establish consumer compatibility or database rollback safety. Use the application
+quality workflow to review combined structural debt and coverage trends.
+
+Describe intended behavior, affected modules/contracts, preserved invariants,
+acceptance and failure examples, the documentation decision, and any recovery
+impact in the change review. Quality findings should be fixed or covered by a
+reviewed, expiring exception where that mechanism applies; regenerating a debt
+baseline is not an automatic part of a green build.
 
 ## Add or improve a predicate
 

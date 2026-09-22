@@ -1,6 +1,5 @@
 import math
-from math import radians, cos, sin
-from typing import List, Tuple, Union
+from typing import List, Tuple
 from scipy.spatial import KDTree
 import numpy as np
 

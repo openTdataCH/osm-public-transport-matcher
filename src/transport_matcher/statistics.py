@@ -145,12 +145,10 @@ def compute_quality_metrics(
 
     # Build KDTree for "not matched to closest" and cross-predicate consistency
     osm_coords: List[Tuple[float, float]] = []
-    osm_node_ids: List[str] = []
     for node in all_osm_nodes:
         lat, lon = getattr(node, 'lat', None), getattr(node, 'lon', None)
         if lat is not None and lon is not None :
             osm_coords.append((float(lat), float(lon)))
-            osm_node_ids.append(str(node.node_id))
 
     not_closest_count = 0
     consistent_count = 0
@@ -167,13 +165,11 @@ def compute_quality_metrics(
             if atlas_node is None or osm_node is None:
                 continue
             a_lat, a_lon = getattr(atlas_node, 'lat', None), getattr(atlas_node, 'lon', None)
-            matched_osm_id = str(osm_node.node_id)
             if a_lat is None or a_lon is None:
                 continue
 
             query_point = to_xyz(a_lat, a_lon)
-            nearest_distance, idx = tree.query(query_point, k=1)
-            nearest_osm_id = osm_node_ids[idx]
+            nearest_distance, _ = tree.query(query_point, k=1)
             
             stage = _classify_match_type(getattr(rec, 'match_type', '') or '')
 
@@ -309,5 +305,4 @@ def compute_quality_metrics(
         "cross_predicate_consistency": cross_predicate,
         "osm_groups": osm_group_stats,
     }
-
 

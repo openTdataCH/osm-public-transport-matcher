@@ -16,7 +16,7 @@ from .core.predicates.route_matching_gtfs import RouteMatchPredicate
 from .core.problem_detection.context import ProblemContext
 from .core.problem_detection.pipeline import STOP_PROBLEM_PIPELINE
 from .core.utils.common import haversine_distance
-from .profiles import MatchingProfile
+from .core.profile import MatchingProfile
 from .progress import progress_stage
 
 

@@ -16,7 +16,7 @@ from typing import Iterable
 from transport_matcher.timing import stage
 
 
-PROGRESS_SCHEMA_VERSION = 1
+PROGRESS_SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -37,41 +37,41 @@ ENGINE_PROGRESS_STAGES = (
         "Probe the remote ATLAS and GTFS snapshots for freshness.", 10,
     ),
     ProgressStage(
-        "atlas.prepare", "atlas", "atlas", "Download and prepare ATLAS stops",
+        "atlas.prepare", "source_files", "source_files", "Download and prepare ATLAS stops",
         "Download or reuse ATLAS, then apply country, boundary, validity and platform filters.", 10,
     ),
     ProgressStage(
-        "atlas.load", "atlas", "atlas", "Read ATLAS stops",
-        "Read and normalize the selected local ATLAS snapshot.", 20,
+        "timetable.download", "source_files", "source_files", "Download timetable data",
+        "Download and extract the GTFS source files, or reuse the verified source cache.", 20,
     ),
     ProgressStage(
-        "timetable.download", "timetable", "timetable", "Download timetable data",
-        "Download and extract the GTFS source files, or reuse the verified source cache.", 10,
+        "timetable.patterns", "source_files", "source_files", "Prepare timetable patterns",
+        "Filter stop times and reduce repeated trips into reusable route patterns.", 30,
     ),
     ProgressStage(
-        "timetable.patterns", "timetable", "timetable", "Prepare timetable patterns",
-        "Filter stop times and reduce repeated trips into reusable route patterns.", 20,
-    ),
-    ProgressStage(
-        "timetable.identities_routes", "timetable", "timetable",
+        "timetable.identities_routes", "source_files", "source_files",
         "Match stops and build timetable routes",
-        "Resolve GTFS stops to ATLAS and build line families, itineraries and stop calls.", 30,
+        "Resolve GTFS stops to ATLAS and build line families, itineraries and stop calls.", 40,
     ),
     ProgressStage(
-        "timetable.load", "timetable", "timetable", "Read cached timetable products",
-        "Read local route, identity and source metadata products.", 40,
+        "osm.download", "source_files", "source_files", "Download OSM data from Overpass",
+        "Request the Swiss public-transport snapshot and save the returned OSM XML.", 50,
     ),
     ProgressStage(
-        "timetable.local_feed", "timetable", "timetable", "Prepare the supplied GTFS feed",
-        "Read the supplied GTFS feed and prepare stop identities and route products.", 50,
+        "atlas.load", "matching_inputs", "matching_inputs", "Read ATLAS stops",
+        "Read and normalize the selected local ATLAS snapshot.", 10,
     ),
     ProgressStage(
-        "osm.download", "osm", "osm", "Download OSM data from Overpass",
-        "Request the Swiss public-transport snapshot and save the returned OSM XML.", 10,
+        "timetable.load", "matching_inputs", "matching_inputs", "Read cached timetable products",
+        "Read local route, identity and source metadata products.", 20,
     ),
     ProgressStage(
-        "osm.prepare", "osm", "osm", "Parse and prepare OSM data",
-        "Parse stops, selected ways, route relations, memberships and route evidence.", 20,
+        "timetable.local_feed", "matching_inputs", "matching_inputs", "Prepare the supplied GTFS feed",
+        "Read the supplied GTFS feed and prepare stop identities and route products.", 30,
+    ),
+    ProgressStage(
+        "osm.prepare", "matching_inputs", "matching_inputs", "Parse and prepare OSM data",
+        "Parse stops, selected ways, route relations, memberships and route evidence.", 40,
     ),
     ProgressStage(
         "stop_matching.groups", "stop_matching", "stop_matching", "Build OSM stop groups",
@@ -178,7 +178,7 @@ def emit_progress_plan(
 
 def run_progress_plan(*, command: str, download=False, processed=False, gtfs=False) -> list[dict]:
     """Select public work using the same resolved inputs that execution uses."""
-    phases = None if download else {"atlas", "timetable", "osm", "stop_matching", "route_matching", "bundle"}
+    phases = None if download else {"matching_inputs", "stop_matching", "route_matching", "bundle"}
     excluded = set()
     if not download:
         excluded.update({"atlas.prepare", "timetable.download", "timetable.patterns", "timetable.identities_routes", "osm.download"})

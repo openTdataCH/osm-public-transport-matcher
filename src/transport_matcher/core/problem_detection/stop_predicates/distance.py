@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Optional
 
 from transport_matcher.core.problem_detection.result import ProblemResult
 from transport_matcher.core.problem_detection.context import (
     ProblemContext,
-    DISTANCE_THRESHOLD_P1,
-    DISTANCE_THRESHOLD_P2,
-    DISTANCE_THRESHOLD_P3,
 )
 
 

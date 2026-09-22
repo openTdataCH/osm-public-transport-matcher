@@ -7,4 +7,8 @@ __pycache__/
 build/
 dist/
 /results/
-
+.coverage*
+.ruff_cache/
+.hypothesis/
+/quality/raw/
+/mutants/

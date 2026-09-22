@@ -22,9 +22,12 @@ def test_progress_catalog_is_unique_ordered_and_directly_parented():
     ids = [stage.id for stage in ENGINE_PROGRESS_STAGES]
     assert len(ids) == len(set(ids))
     assert all(stage.parent_id == stage.phase for stage in ENGINE_PROGRESS_STAGES)
-    assert [stage.id for stage in ENGINE_PROGRESS_STAGES if stage.parent_id == "osm"] == [
+    assert [stage.id for stage in ENGINE_PROGRESS_STAGES if stage.parent_id == "source_files"] == [
+        "atlas.prepare",
+        "timetable.download",
+        "timetable.patterns",
+        "timetable.identities_routes",
         "osm.download",
-        "osm.prepare",
     ]
 
 
@@ -39,7 +42,7 @@ def test_progress_plan_is_versioned_and_self_describing(capsys):
 
 
 def test_progress_plan_can_omit_inapplicable_work(capsys):
-    emit_progress_plan(phases={"osm"}, excluded_stage_ids={"osm.download"})
+    emit_progress_plan(phases={"matching_inputs"}, excluded_stage_ids={"atlas.load", "timetable.load", "timetable.local_feed"})
     [event] = _events(capsys.readouterr().out)
 
     assert [stage["id"] for stage in event["stages"]] == ["osm.prepare"]
@@ -105,7 +108,7 @@ def test_real_cli_plan_matches_executed_work(mode, tmp_path, capsys):
     started = [e['stage_id'] for e in lifecycle if e['event'] == 'stage_started']
     finished = [e['stage_id'] for e in lifecycle if e['event'] == 'stage_finished']
     assert set(started) == planned == set(finished)
-    assert len(started) == len(planned) == len(finished)
+    assert started == finished == [spec['id'] for spec in events[0]['stages']]
     assert 'osm.download' not in planned
     assert ('timetable.local_feed' in planned) == (mode != 'swiss')
     assert ('atlas.load' in planned) == (mode != 'gtfs')

@@ -1,0 +1,80 @@
+name: Engine security
+
+on:
+  pull_request:
+  schedule:
+    - cron: '27 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependencies:
+    name: Production dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+      - name: Install production extras in isolation
+        run: |
+          mkdir -p quality/raw
+          python -m venv "$RUNNER_TEMP/engine-production"
+          "$RUNNER_TEMP/engine-production/bin/python" -m pip install \
+            --report quality/raw/engine-production-install.json '.[acquisition,swiss,gtfs]'
+      - name: Record the exact production dependency closure
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          raw = Path('quality/raw')
+          packages = json.loads((raw / 'engine-production-install.json').read_text())['install']
+          requirements = sorted(
+              f"{item['metadata']['name']}=={item['metadata']['version']}"
+              for item in packages
+              if item['metadata']['name'].lower().replace('_', '-') != 'transport-matcher'
+          )
+          if not requirements:
+              raise SystemExit('Production dependency collection returned no packages')
+          (raw / 'engine-production-requirements.txt').write_text('\n'.join(requirements) + '\n')
+          PY
+      - name: Audit the resolved dependencies
+        run: |
+          python -m pip install pip-audit==2.10.1
+          pip-audit --strict --no-deps --disable-pip \
+            -r quality/raw/engine-production-requirements.txt \
+            --format json --output quality/raw/engine-python-audit.json
+      - name: Preserve dependency evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-dependency-security-${{ github.sha }}
+          path: |
+            quality/raw/engine-production-install.json
+            quality/raw/engine-production-requirements.txt
+            quality/raw/engine-python-audit.json
+          if-no-files-found: error
+
+  codeql:
+    name: Python security analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          build-mode: none
+          config: |
+            paths:
+              - src
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:python

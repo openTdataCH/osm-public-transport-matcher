@@ -11,3 +11,8 @@ tests
 **/*.egg-info
 .pytest_cache
 results
+quality/raw
+mutants
+.ruff_cache
+.coverage*
+.hypothesis

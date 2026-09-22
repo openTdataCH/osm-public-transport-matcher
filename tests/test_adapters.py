@@ -5,7 +5,6 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from transport_matcher.adapters.atlas import atlas_records, atlas_state
 from transport_matcher.adapters.gtfs import read_gtfs, run_gtfs
 from transport_matcher.adapters.osm import read_osm
 from transport_matcher.adapters.get_atlas_gtfs import build_gtfs_db_payload_rows

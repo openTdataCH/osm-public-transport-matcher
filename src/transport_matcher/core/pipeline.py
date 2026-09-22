@@ -9,7 +9,7 @@ from contextlib import nullcontext
 from itertools import groupby
 import logging
 from typing import TYPE_CHECKING
-from transport_matcher.profiles import MatchingProfile
+from transport_matcher.core.profile import MatchingProfile
 from transport_matcher.core.route_state import RouteState
 
 from transport_matcher.core.utils.common import haversine_distance

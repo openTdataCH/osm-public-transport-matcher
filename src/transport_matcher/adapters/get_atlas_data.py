@@ -14,11 +14,7 @@ from typing import Optional
 
 from .geo_utils import filter_points_in_switzerland
 from .get_atlas_gtfs import (
-    build_gtfs_atlas_payload,
-    download_and_extract_gtfs,
-    load_gtfs_data_streaming,
     build_integrated_gtfs_data_streaming,
-    write_gtfs_db_payload_cache,
 )
 from transport_matcher.profiles.switzerland import normalize_route_id as _normalize_route_id_for_matching
 
@@ -395,11 +391,9 @@ def _build_atlas_itinerary_frames(
         direction_id = _safe_direction_id(trip_meta.get('direction_id') if trip_meta is not None else ordered_calls.iloc[0].get('direction_id'))
         representative_headsign = None
         trip_short_name = None
-        shape_id = None
         if trip_meta is not None:
             representative_headsign = _first_non_empty([trip_meta.get('trip_headsign')])
             trip_short_name = _first_non_empty([trip_meta.get('trip_short_name')])
-            shape_id = _first_non_empty([trip_meta.get('shape_id')])
 
         if len(ordered_calls['stop_id']) == 0:
             continue

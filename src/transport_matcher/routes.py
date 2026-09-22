@@ -489,9 +489,7 @@ def _build_line_family_rows(
         normalized_gtfs_route_id = _first_non_empty(relation.get('route_id_normalized'), gtfs_route_id)
         ref = relation.get('ref')
         operator = relation.get('operator')
-        operator_wikidata = relation.get('operator_wikidata')
         network = relation.get('network')
-        network_wikidata = relation.get('network_wikidata')
         route = relation.get('route')
 
         if route_master_id and route_master_id in route_master_lookup:

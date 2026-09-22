@@ -1,8 +1,6 @@
-import json
 from pathlib import Path
 import shutil
 
-import pandas as pd
 import pytest
 
 from transport_matcher.adapters import acquisition
@@ -143,7 +141,7 @@ def test_full_cli_plan_resolves_on_cold_and_warm_runs(tmp_path, sources, capsys,
         plan = {spec['id'] for spec in events[0]['stages']}
         terminal = [e['stage_id'] for e in events if e['event'] in {'stage_finished', 'stage_outcome'}]
         assert plan == set(terminal)
-        assert len(terminal) == len(plan)
+        assert terminal == [spec['id'] for spec in events[0]['stages']]
         assert not any(e['event'] == 'stage_failed' for e in events)
 
 

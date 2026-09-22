@@ -4,8 +4,8 @@ from collections import defaultdict
 from typing import Optional
 from transport_matcher.core.utils.common import haversine_distance
 from transport_matcher.core.utils.spatial_index import build_kdtree_from_nodes, batch_to_xyz, meters_to_unit_chord_radius
-from transport_matcher.core.models import SourceStop, SourceEntity, OsmNode, OsmEntity
-from transport_matcher.profiles import GroupingPolicy
+from transport_matcher.core.models import SourceEntity, OsmNode, OsmEntity
+from transport_matcher.core.profile import GroupingPolicy
 
 logger = logging.getLogger(__name__)
 

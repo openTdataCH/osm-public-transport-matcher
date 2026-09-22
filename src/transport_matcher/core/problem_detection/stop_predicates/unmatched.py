@@ -34,7 +34,6 @@ def _source_priority(ctx: ProblemContext, record: SourceStop) -> int:
 
 
 def _osm_priority(ctx: ProblemContext, record: OsmNode) -> int:
-    tags = record.tags or {}
     uic = (_safe(record.station_ref) or None) if ctx.profile.station_reference_matching else None
     lat = _safe(record.lat)
     lon = _safe(record.lon)

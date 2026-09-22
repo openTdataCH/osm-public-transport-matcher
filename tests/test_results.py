@@ -5,13 +5,12 @@ from dataclasses import replace
 import gzip
 import hashlib
 import json
-from pathlib import Path
 import threading
 
 import pytest
 
 from transport_matcher import match, SourceStop, OsmNode, write_bundle
-from transport_matcher.results import InvalidResult, validate_bundle, validate_output
+from transport_matcher.results import InvalidResult, validate_bundle
 
 
 def example():

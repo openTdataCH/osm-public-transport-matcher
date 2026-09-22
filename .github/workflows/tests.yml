@@ -16,12 +16,18 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-      - run: python -m pip install '.[swiss,gtfs,acquisition,test]'
-      - run: python -m pytest tests -q
+      - run: python -m pip install '.[swiss,gtfs,acquisition,test,quality]'
+      - run: make quality PYTHON=python
+      - name: Preserve engine evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-quality-evidence
+          path: quality/raw/
+          if-no-files-found: error
       - name: Verify the installed package runs outside the checkout
         working-directory: /tmp
         run: >-
           python -c 'from transport_matcher import SourceStop, OsmNode, match;
           assert match([SourceStop("demo", "1", 51.5, -0.1, name="A")],
           [OsmNode("1", 51.5, -0.1, name="A")]).matched'
-

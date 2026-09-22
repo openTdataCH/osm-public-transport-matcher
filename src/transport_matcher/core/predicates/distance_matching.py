@@ -15,7 +15,6 @@ from scipy.optimize import linear_sum_assignment
 from transport_matcher.core.pipeline import MatchingContext
 from transport_matcher.core.predicates import BasePredicate
 from transport_matcher.core.models import SourceStop, OsmNode
-from transport_matcher.core.utils.common import haversine_distance
 
 logger = logging.getLogger(__name__)
 
