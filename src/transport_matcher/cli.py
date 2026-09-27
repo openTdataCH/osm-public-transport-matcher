@@ -62,6 +62,15 @@ def _execute(args):
             from transport_matcher.integrations.swiss import refresh_swiss
             metadata["acquisition"] = refresh_swiss(workspace, force=args.force)
             args.boundary = args.boundary or workspace / "data/raw/switzerland.geojson"
+        elif workspace and not args.gtfs and all((
+            args.source.resolve() == workspace / 'data/raw/stops_ATLAS.csv',
+            args.osm.resolve() == workspace / 'data/raw/osm_data.xml',
+            args.processed.resolve() == workspace / 'data/processed',
+        )):
+            # Matching cached workspace inputs must carry their original provenance.
+            source_metadata = workspace / 'data/source_metadata.json'
+            if source_metadata.exists():
+                metadata['acquisition'] = json.loads(source_metadata.read_text(encoding='utf-8'))
         result = run_matching(args.source, args.osm, args.processed, args.gtfs, boundary_geojson=args.boundary)
     else:
         from transport_matcher.adapters.gtfs import run_gtfs

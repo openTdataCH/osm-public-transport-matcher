@@ -142,7 +142,10 @@ def refresh_swiss(
                 atlas_path = staging / 'stops_ATLAS.csv'
                 metadata['atlas_filtering'] = get_atlas_stops(atlas_path, atlas_url, boundary_geojson=boundary)
                 os.replace(atlas_path, raw / 'stops_ATLAS.csv')
+                snapshots['atlas']['downloaded_at'] = datetime.now(timezone.utc).isoformat()
                 checkpoint('atlas', atlas_inputs, [raw / 'stops_ATLAS.csv'], snapshots['atlas'])
+        if atlas_reused:
+            snapshots['atlas']['downloaded_at'] = (stages['atlas'].get('source') or {}).get('downloaded_at')
 
         gtfs_inputs = {'boundary': boundary_fingerprint, 'version': CACHE_VERSION, 'backend': backend}
         cache_dir = data_dir / 'cache' / 'gtfs'
@@ -163,6 +166,7 @@ def refresh_swiss(
                     target.mkdir(exist_ok=True)
                     for name in ('stops.txt', 'trips.txt', 'routes.txt', 'stop_times.txt'):
                         os.replace(gtfs_folder / name, target / name)
+                    snapshots['gtfs']['downloaded_at'] = datetime.now(timezone.utc).isoformat()
                     checkpoint('gtfs_source', source_inputs,
                                [target / name for name in ('stops.txt', 'trips.txt', 'routes.txt', 'stop_times.txt')], snapshots['gtfs'])
             # Large working tables stay on the container temporary filesystem.
@@ -185,6 +189,11 @@ def refresh_swiss(
                             gtfs['trip_stop_times_path'] = str(cache_dir / 'trip_stop_times.csv')
                         prepared_gtfs = gtfs
 
+        # The source checkpoint survives preprocessing failures and cache reuse.
+        # Never substitute a probe, processing or remote modification timestamp.
+        snapshots['gtfs']['downloaded_at'] = (
+            stages.get('gtfs_source', {}).get('source') or {}
+        ).get('downloaded_at')
         mapping_inputs = {'atlas': stages['atlas']['files'], 'gtfs': stages['gtfs']['files'], 'version': 1}
         mapping_reused = decide('gtfs_atlas', mapping_inputs)
         if mapping_reused:

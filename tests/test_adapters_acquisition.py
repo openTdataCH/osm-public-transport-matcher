@@ -114,6 +114,47 @@ def test_fixed_permalink_without_validator_does_not_establish_freshness():
     assert source_snapshot_is_unchanged(snapshot, snapshot) is False
 
 
+def test_download_times_survive_reuse_and_failed_processing(tmp_path, sources, monkeypatch):
+    import json
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+
+    _, versions = sources
+    first = datetime(2026, 9, 27, 10, 20, 30, tzinfo=timezone.utc)
+    later = datetime(2026, 9, 28, 11, 22, 33, tzinfo=timezone.utc)
+    monkeypatch.setattr(acquisition, 'datetime', SimpleNamespace(now=lambda zone: first))
+    original = acquisition.query_overpass
+    monkeypatch.setattr(acquisition, 'query_overpass', lambda **kw: (_ for _ in ()).throw(RuntimeError('offline')))
+    with pytest.raises(RuntimeError, match='offline'):
+        refresh(tmp_path)
+    checkpoint = json.loads((tmp_path / 'data/source_metadata.json').read_text())
+    for name in ('atlas', 'gtfs_source'):
+        assert checkpoint['stages'][name]['source']['downloaded_at'] == first.isoformat()
+
+    monkeypatch.setattr(acquisition, 'query_overpass', original)
+    monkeypatch.setattr(acquisition, 'datetime', SimpleNamespace(now=lambda zone: later))
+    warm = refresh(tmp_path)
+    assert warm['last_overpass_query_at'] == later.isoformat()
+    assert {s['downloaded_at'] for s in warm['sources'].values()} == {first.isoformat()}
+    versions['GTFS'] = '2'
+    changed = refresh(tmp_path)
+    assert changed['sources']['atlas']['downloaded_at'] == first.isoformat()
+    assert changed['sources']['gtfs']['downloaded_at'] == later.isoformat()
+
+
+def test_old_cache_does_not_invent_download_times(tmp_path, sources):
+    import json
+
+    refresh(tmp_path)
+    path = tmp_path / 'data/source_metadata.json'
+    metadata = json.loads(path.read_text())
+    for entry in [*metadata['sources'].values(), *(s['source'] for s in metadata['stages'].values() if s['source'])]:
+        entry.pop('downloaded_at', None)
+    path.write_text(json.dumps(metadata))
+    reused = refresh(tmp_path)
+    assert all(s['downloaded_at'] is None for s in reused['sources'].values())
+
+
 def test_corrupt_parsed_cache_reuses_verified_download(tmp_path, sources, capsys):
     calls, _ = sources
     refresh(tmp_path)
@@ -132,8 +173,10 @@ def test_corrupt_parsed_cache_reuses_verified_download(tmp_path, sources, capsys
 def test_full_cli_plan_resolves_on_cold_and_warm_runs(tmp_path, sources, capsys, local_feed):
     from transport_matcher.cli import main
     feed = Path(__file__).resolve().parents[1] / 'examples/gtfs'
-    for run in ('cold', 'warm'):
-        args = ['swiss', '--workspace', str(tmp_path), '--download', '--output', str(tmp_path / run)]
+    for run in ('cold', 'warm', 'cached'):
+        args = ['swiss', '--workspace', str(tmp_path), '--output', str(tmp_path / run)]
+        if run != 'cached':
+            args += ['--download']
         if local_feed:
             args += ['--gtfs', str(feed)]
         main(args)
@@ -143,6 +186,10 @@ def test_full_cli_plan_resolves_on_cold_and_warm_runs(tmp_path, sources, capsys,
         assert plan == set(terminal)
         assert terminal == [spec['id'] for spec in events[0]['stages']]
         assert not any(e['event'] == 'stage_failed' for e in events)
+        if not local_feed:
+            import json
+            manifest = json.loads((tmp_path / run / 'manifest.json').read_text())
+            assert manifest['metadata']['acquisition'] == json.loads((tmp_path / 'data/source_metadata.json').read_text())
 
 
 def test_expired_atlas_validity_invalidates_even_when_validator_is_unchanged(tmp_path, sources, monkeypatch):

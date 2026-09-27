@@ -50,7 +50,7 @@ ENGINE_PROGRESS_STAGES = (
     ),
     ProgressStage(
         "timetable.identities_routes", "source_files", "source_files",
-        "Match stops and build timetable routes",
+        "Match GTFS stops to ATLAS and build timetable routes",
         "Resolve GTFS stops to ATLAS and build line families, itineraries and stop calls.", 40,
     ),
     ProgressStage(
