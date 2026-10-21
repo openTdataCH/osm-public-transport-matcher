@@ -52,12 +52,12 @@
       "responsibility": "Allocate normalized source and OSM entities using explicit policies, compare routes, and identify matching problems.",
       "paths": {
         "source": [
-          "src/transport_matcher/core/**/*.py",
-          "src/transport_matcher/api.py",
-          "src/transport_matcher/routes.py",
-          "src/transport_matcher/statistics.py",
-          "src/transport_matcher/timing.py",
-          "src/transport_matcher/progress.py"
+          "src/public_transport_matcher/core/**/*.py",
+          "src/public_transport_matcher/api.py",
+          "src/public_transport_matcher/routes.py",
+          "src/public_transport_matcher/statistics.py",
+          "src/public_transport_matcher/timing.py",
+          "src/public_transport_matcher/progress.py"
         ],
         "tests": [
           "tests/test_api.py",
@@ -70,7 +70,7 @@
         ]
       },
       "entrypoints": [
-        "transport_matcher.api:match"
+        "public_transport_matcher.api:match"
       ],
       "contracts": {
         "produces": [
@@ -112,11 +112,11 @@
       "responsibility": "Acquire, normalize, and cache external data with explicit dataset-specific policies and provenance.",
       "paths": {
         "source": [
-          "src/transport_matcher/acquisition/**/*.py",
-          "src/transport_matcher/adapters/**/*.py",
-          "src/transport_matcher/integrations/**/*.py",
-          "src/transport_matcher/profiles/**/*.py",
-          "src/transport_matcher/swiss.py",
+          "src/public_transport_matcher/acquisition/**/*.py",
+          "src/public_transport_matcher/adapters/**/*.py",
+          "src/public_transport_matcher/integrations/**/*.py",
+          "src/public_transport_matcher/profiles/**/*.py",
+          "src/public_transport_matcher/swiss.py",
           "benchmarks/**/*.py"
         ],
         "tests": [
@@ -125,8 +125,8 @@
         ]
       },
       "entrypoints": [
-        "transport_matcher.adapters.gtfs:run_gtfs",
-        "transport_matcher.swiss:run_matching"
+        "public_transport_matcher.adapters.gtfs:run_gtfs",
+        "public_transport_matcher.swiss:run_matching"
       ],
       "contracts": {
         "produces": [
@@ -169,10 +169,10 @@
       "responsibility": "Validate and atomically publish versioned bundles, expose the public API and CLI, and maintain engine quality and deployment tooling.",
       "paths": {
         "source": [
-          "src/transport_matcher/results/**/*.py",
-          "src/transport_matcher/__init__.py",
-          "src/transport_matcher/__main__.py",
-          "src/transport_matcher/cli.py",
+          "src/public_transport_matcher/results/**/*.py",
+          "src/public_transport_matcher/__init__.py",
+          "src/public_transport_matcher/__main__.py",
+          "src/public_transport_matcher/cli.py",
           ".github/**/*.yml",
           "quality/**/*.py",
           "quality/**/*.json",
@@ -188,9 +188,9 @@
         ]
       },
       "entrypoints": [
-        "transport_matcher.results:write_bundle",
-        "transport_matcher.results:validate_bundle",
-        "transport_matcher.cli:main"
+        "public_transport_matcher.results:write_bundle",
+        "public_transport_matcher.results:validate_bundle",
+        "public_transport_matcher.cli:main"
       ],
       "contracts": {
         "produces": [

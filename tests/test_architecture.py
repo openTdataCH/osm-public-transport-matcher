@@ -16,23 +16,23 @@ def test_engine_dependency_boundaries():
 
 
 @pytest.mark.parametrize("statement", [
-    "import transport_matcher.adapters.gtfs",
-    "from transport_matcher import profiles",
+    "import public_transport_matcher.adapters.gtfs",
+    "from public_transport_matcher import profiles",
     "from ..results import write_bundle",
     "from .. import acquisition",
     "from backend.models import Stop",
 ])
 def test_dependency_guard_rejects_absolute_and_relative_imports(tmp_path, statement):
-    source = tmp_path / "src/transport_matcher/core/bad.py"
+    source = tmp_path / "src/public_transport_matcher/core/bad.py"
     source.parent.mkdir(parents=True)
     source.write_text(statement)
     assert CHECK.architecture_errors(tmp_path)
 
 
 def test_generic_policy_preserves_public_import_identity():
-    from transport_matcher import MatchingProfile, ReferenceRule
-    from transport_matcher.core import profile
-    from transport_matcher.profiles import GroupingPolicy, SWITZERLAND
+    from public_transport_matcher import MatchingProfile, ReferenceRule
+    from public_transport_matcher.core import profile
+    from public_transport_matcher.profiles import GroupingPolicy, SWITZERLAND
 
     assert MatchingProfile is profile.MatchingProfile
     assert ReferenceRule is profile.ReferenceRule

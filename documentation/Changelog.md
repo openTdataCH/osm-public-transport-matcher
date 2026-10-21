@@ -1,6 +1,6 @@
 # Matching engine changelog
 
-This page records notable changes to the standalone `transport-matcher` package,
+This page records notable changes to the standalone `public-transport-matcher` package,
 its adapters, matching behavior, result production and command-line interface.
 Review-application releases are recorded separately in the
 [review application changelog](https://github.com/openTdataCH/stop_sync_osm_atlas/blob/main/documentation/Changelog.md).
@@ -11,45 +11,23 @@ consumer side.
 
 ---
 
-## Unreleased
+## Version 0.2.0
 
-### Operations
+First public release. Versions 0.1.x were internal pre-releases.
 
-- **Versioned progress contract** — The CLI now emits a self-describing public substage plan and structured lifecycle events. The catalog consolidates low-level GTFS, proximity and problem predicates into stable operational steps while retaining detailed internal timings.
-- **Accurate name-matching stage description** — The `stop_matching.name` description no longer claims name normalization; the rule compares exact names.
+### Matching
 
-### Documentation
+- **Source-neutral core** — Stop matching, problem detection, route comparison and quality metrics run on normalized records, without file, network or database access.
+- **Dataset profiles** — `MatchingProfile` holds the rule order, reference rules, OSM grouping and thresholds; `profiles.SWITZERLAND` is the Swiss policy and the generic default needs no SLOID or UIC identifiers.
+- **Route comparison** — Every adapter delivers `source_routes`, `source_itineraries` and `source_stop_calls`; `compare_routes()` matches line families and ordered itineraries against OSM PTv2 relations.
 
-- **Result bundle format in the documentation tree** — The schema-1 reference moved from `RESULT_FORMAT.md` to [`documentation/Result bundle format.md`](Result%20bundle%20format.md), so the documentation portal and PDF include it; `RESULT_FORMAT.md` points to the new page.
-- **Rewritten engine chapters** — The matching, route, problem and operations pages describe current behaviour, document every dataset-profile setting, and add generated diagrams of the engine's structure, the rule order, the route model and the bundle layout.
+### Inputs
 
-## Version 0.1.1
+- **Adapters** — Generic GTFS (folder or ZIP), Swiss ATLAS with GTFS-to-SLOID resolution, and OSM XML. External datasets implement the public `SourceAdapter` contract without changes to this package.
+- **Swiss acquisition** — Optional downloads with staged, verified caches; the Swiss GTFS feed is reduced to trip patterns in DuckDB.
 
-Documentation patch release.
+### Results and operations
 
-### Documentation
-
-- Defined package versions, immutable Git tags, deployment SHA pins and result-schema versions as separate identifiers.
-- Added the release and consumer-upgrade checklist.
-
-## Version 0.1.0
-
-Initial independent release extracted from the original Stop Sync OSM Atlas
-pipeline.
-
-### Added
-
-- **Standalone package and CLI** — Added an installable Python package with source adapters, dataset profiles, offline tests and the `transport-matcher` command.
-- **Generic GTFS workflow** — Added namespaced source identities and matching profiles so feeds can be processed without SLOID or UIC identifiers.
-- **Independent result production** — Matching runs now write complete, validated result bundles without Flask, SQLAlchemy, PostGIS or review-application imports.
-- **Explicit integration boundary** — Added a public external-adapter contract and a first-party Swiss integration entry point. Generic GTFS route products now use `source_*` names internally while schema 1 retains its deprecated legacy field names at the serialization boundary.
-- **Separated OSM acquisition and parsing** — Overpass network access, normalized OSM element parsing and PTv2 route-product parsing now live in separate modules; the former combined module remains as a compatibility shim.
-
-### Performance
-
-- **Staged source caching** — ATLAS filtering, GTFS download and parsing, and GTFS-to-ATLAS mapping invalidate independently; full Swiss runs continue to refresh OSM.
-- **Large-feed GTFS processing** — The Swiss adapter uses DuckDB and reduced trip patterns before constructing Python itineraries.
-
-### Compatibility
-
-- **Versioned result contract** — Version 1 bundles carry manifests, checksums and explicit source identities for independent consumers. The corresponding application-side change is recorded in the [review application changelog](https://github.com/openTdataCH/stop_sync_osm_atlas/blob/main/documentation/Changelog.md).
+- **Result bundle, schema 1** — A validated, checksummed and atomically published directory of stops, matches, unmatched entities, groups, problems, routes, extensions and diagnostics, with source-neutral field names throughout.
+- **Command line** — `public-transport-matcher swiss` and `public-transport-matcher gtfs`, with structured progress events (progress schema version 2).
+- **Documentation** — Engine chapters on inputs, matching, routes, problems, operations and the bundle format, with generated diagrams.

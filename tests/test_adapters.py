@@ -5,11 +5,11 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from transport_matcher.adapters.gtfs import read_gtfs, run_gtfs
-from transport_matcher.adapters.osm import read_osm
-from transport_matcher.adapters.get_atlas_gtfs import build_gtfs_db_payload_rows
-from transport_matcher.adapters.get_osm_data import process_osm_routes_data
-from transport_matcher.swiss import run_matching
+from public_transport_matcher.adapters.gtfs import read_gtfs, run_gtfs
+from public_transport_matcher.adapters.osm import read_osm
+from public_transport_matcher.adapters.get_atlas_gtfs import build_gtfs_db_payload_rows
+from public_transport_matcher.adapters.osm_routes import process_osm_routes_data
+from public_transport_matcher.swiss import run_matching
 
 
 def _csv(path, rows, *, delimiter=','):
@@ -57,12 +57,9 @@ def test_gtfs_without_swiss_identifiers_preserves_feed_scope_and_repeated_calls(
     assert paris == {'paris:A', 'paris:B'}
     assert not paris & lyon
     assert all(not stop.station_ref for stop in first.source.get_all_rows_as_dict().values())
-    assert set(first.route_data) == {
-        'source_line_families', 'source_itineraries', 'source_itinerary_stop_calls',
-    }
-    calls = first.route_data['source_itinerary_stop_calls']
-    assert 'source_itinerary_id' in calls and 'source_stop_key' in calls
-    assert 'atlas_itinerary_id' not in calls and 'resolved_sloid' not in calls
+    assert set(first.route_data) == {'source_routes', 'source_itineraries', 'source_stop_calls'}
+    calls = first.route_data['source_stop_calls']
+    assert {'itinerary_id', 'source_stop_id', 'source_stop_key'} <= set(calls.columns)
     assert list(calls.stop_sequence) == [10, 20, 30]
     assert list(calls.canonical_stop_key) == ['paris:A', 'paris:B', 'paris:A']
     assert first.source.get_route_evidence('paris:A')['gtfs'][0]['route_id_normalized'] == 'paris:route:R-j25'
@@ -180,7 +177,7 @@ def test_swiss_fresh_gtfs_exports_identity_and_normalized_route_match_without_so
 def test_explicit_boundary_changes_between_runs_are_respected(tmp_path):
     import json
     pytest.importorskip('geopandas')
-    from transport_matcher.adapters.geo_utils import filter_points_in_switzerland
+    from public_transport_matcher.adapters.geo_utils import filter_points_in_switzerland
     boundary = tmp_path / 'boundary.geojson'
     frame = pd.DataFrame([{'lat': 0.5, 'lon': 0.5}, {'lat': 3.5, 'lon': 3.5}])
     def write_square(start):
@@ -195,7 +192,7 @@ def test_explicit_boundary_changes_between_runs_are_respected(tmp_path):
     assert second['lat'].tolist() == [3.5]
 
 
-def test_swiss_snapshot_matches_original_head_golden_decisions():
+def test_swiss_example_matches_expected_decisions():
     import json
     example = Path(__file__).resolve().parents[1] / 'examples/swiss'
     expected = json.loads((example / 'expected.json').read_text())
@@ -237,7 +234,7 @@ def test_gtfs_parent_station_cannot_compete_with_its_boarding_stop(tmp_path):
 
 
 def test_osm_evidence_only_indexes_exported_elements_and_reports_external_stops(tmp_path):
-    from transport_matcher.adapters.route_products import unresolved_osm_member_diagnostics
+    from public_transport_matcher.adapters.route_products import unresolved_osm_member_diagnostics
     path = _osm(tmp_path / 'osm.xml')
     path.write_text(path.read_text().replace('</relation>', '<member type="node" ref="999" role="platform"/></relation>'))
     state = read_osm(path)

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from transport_matcher.progress import (
+from public_transport_matcher.progress import (
     ENGINE_PROGRESS_STAGES,
     PROGRESS_SCHEMA_VERSION,
     emit_progress_plan,
@@ -88,8 +88,8 @@ def public_events(output):
 
 @pytest.mark.parametrize('mode', ['swiss', 'swiss-local-gtfs', 'gtfs'])
 def test_real_cli_plan_matches_executed_work(mode, tmp_path, capsys):
-    from transport_matcher.cli import main
-    from transport_matcher.results import validate_bundle
+    from public_transport_matcher.cli import main
+    from public_transport_matcher.results import validate_bundle
 
     examples = Path(__file__).resolve().parents[1] / 'examples'
     if mode == 'gtfs':
@@ -120,7 +120,7 @@ def test_real_cli_plan_matches_executed_work(mode, tmp_path, capsys):
 
 
 def test_missing_local_input_is_attributed_to_its_actual_stage(tmp_path, capsys):
-    from transport_matcher.cli import main
+    from public_transport_matcher.cli import main
     examples = Path(__file__).resolve().parents[1] / 'examples'
     with pytest.raises(FileNotFoundError):
         main(['swiss', '--source', str(tmp_path / 'missing.csv'), '--osm', str(examples / 'osm.xml'),
@@ -133,7 +133,7 @@ def test_missing_local_input_is_attributed_to_its_actual_stage(tmp_path, capsys)
 
 def test_reporting_rejects_nonadjacent_passes_before_matching():
     from types import SimpleNamespace
-    from transport_matcher.core.pipeline import run_pipeline
+    from public_transport_matcher.core.pipeline import run_pipeline
     calls = []
     predicates = [SimpleNamespace(progress_stage_id=stage_id, run=lambda ctx: calls.append(ctx))
                   for stage_id in ('stop_matching.proximity', 'stop_matching.name', 'stop_matching.proximity')]

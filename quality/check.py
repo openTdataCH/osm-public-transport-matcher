@@ -11,9 +11,9 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 CORE_FORBIDDEN = (
-    "transport_matcher.acquisition", "transport_matcher.adapters",
-    "transport_matcher.integrations", "transport_matcher.profiles",
-    "transport_matcher.results", "transport_matcher.swiss", "transport_matcher.cli",
+    "public_transport_matcher.acquisition", "public_transport_matcher.adapters",
+    "public_transport_matcher.integrations", "public_transport_matcher.profiles",
+    "public_transport_matcher.results", "public_transport_matcher.swiss", "public_transport_matcher.cli",
 )
 APP_FORBIDDEN = ("backend", "stop_sync_osm_atlas")
 CODE_SUFFIXES = {".py", ".js", ".cjs", ".mjs", ".css", ".html", ".sql", ".sh", ".yml", ".yaml", ".json", ".toml"}

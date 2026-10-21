@@ -1,8 +1,8 @@
 import pytest
 import pandas as pd
 
-from transport_matcher.adapters import get_atlas_gtfs as gtfs_mod
-from transport_matcher.adapters.get_atlas_gtfs import parse_gtfs_stop_ids
+from public_transport_matcher.adapters import get_atlas_gtfs as gtfs_mod
+from public_transport_matcher.adapters.get_atlas_gtfs import parse_gtfs_stop_ids
 
 
 def test_parse_gtfs_stop_ids_uses_didok_for_sloid_stop_ids():

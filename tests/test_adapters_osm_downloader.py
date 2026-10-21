@@ -10,19 +10,17 @@ class DummyResponse:
         self.encoding = None
 
 
-def test_acquisition_and_route_parsing_have_separate_canonical_modules():
-    from transport_matcher.acquisition.overpass import build_public_transport_query
-    from transport_matcher.adapters import get_osm_data
-    from transport_matcher.adapters.osm_routes import process_osm_routes_data
+def test_overpass_query_and_route_parsing_live_in_separate_modules():
+    from public_transport_matcher.acquisition.overpass import build_public_transport_query
+    from public_transport_matcher.adapters.osm_routes import process_osm_routes_data
 
     assert 'ISO3166-1"="FR' in build_public_transport_query('fr')
     assert process_osm_routes_data('<osm/>', out_dir=None)['osm_route_relations'].empty
-    assert get_osm_data.process_osm_routes_data is process_osm_routes_data
 
 
 def test_query_overpass_posts_raw_query(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    from transport_matcher.adapters import get_osm_data
+    from public_transport_matcher.acquisition import overpass
     captured = {}
 
     class DummySession:
@@ -33,10 +31,10 @@ def test_query_overpass_posts_raw_query(monkeypatch, tmp_path):
             captured["timeout"] = timeout
             return DummyResponse(text="<osm version='0.6'></osm>", url=url)
 
-    result = get_osm_data.query_overpass(session=DummySession())
+    result = overpass.query_overpass(session=DummySession())
 
     assert result == "<osm version='0.6'></osm>"
-    assert captured["url"] == get_osm_data.OVERPASS_URL
+    assert captured["url"] == overpass.OVERPASS_URL
     assert isinstance(captured["data"], bytes)
     assert captured["data"].decode("utf-8").startswith("[out:xml]")
     assert '[type=route][route!=hiking]' in captured["data"].decode("utf-8")
@@ -47,14 +45,14 @@ def test_query_overpass_posts_raw_query(monkeypatch, tmp_path):
 
 def test_query_overpass_raises_on_http_error(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    from transport_matcher.adapters import get_osm_data
+    from public_transport_matcher.acquisition import overpass
 
     class DummySession:
         def post(self, url, data=None, headers=None, timeout=None):
             return DummyResponse(status_code=406, text="Not Acceptable", url=url)
 
     try:
-        get_osm_data.query_overpass(session=DummySession())
+        overpass.query_overpass(session=DummySession())
     except RuntimeError as exc:
         message = str(exc)
     else:
@@ -66,11 +64,11 @@ def test_query_overpass_raises_on_http_error(monkeypatch, tmp_path):
 
 def test_query_overpass_retries_504_then_succeeds(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    from transport_matcher.adapters import get_osm_data
-    monkeypatch.setattr(get_osm_data, "OVERPASS_MAX_RETRIES", 2)
-    monkeypatch.setattr(get_osm_data, "OVERPASS_RETRY_BACKOFF_SECONDS", 0.25)
+    from public_transport_matcher.acquisition import overpass
+    monkeypatch.setattr(overpass, "OVERPASS_MAX_RETRIES", 2)
+    monkeypatch.setattr(overpass, "OVERPASS_RETRY_BACKOFF_SECONDS", 0.25)
     sleeps = []
-    monkeypatch.setattr(get_osm_data.time, "sleep", sleeps.append)
+    monkeypatch.setattr(overpass.time, "sleep", sleeps.append)
 
     class DummySession:
         def __init__(self):
@@ -84,7 +82,7 @@ def test_query_overpass_retries_504_then_succeeds(monkeypatch, tmp_path):
 
     session = DummySession()
 
-    result = get_osm_data.query_overpass(session=session)
+    result = overpass.query_overpass(session=session)
 
     assert result == "<osm version='0.6'></osm>"
     assert session.calls == 2
@@ -93,11 +91,11 @@ def test_query_overpass_retries_504_then_succeeds(monkeypatch, tmp_path):
 
 def test_query_overpass_exhausts_retries_for_502(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    from transport_matcher.adapters import get_osm_data
-    monkeypatch.setattr(get_osm_data, "OVERPASS_MAX_RETRIES", 2)
-    monkeypatch.setattr(get_osm_data, "OVERPASS_RETRY_BACKOFF_SECONDS", 0.5)
+    from public_transport_matcher.acquisition import overpass
+    monkeypatch.setattr(overpass, "OVERPASS_MAX_RETRIES", 2)
+    monkeypatch.setattr(overpass, "OVERPASS_RETRY_BACKOFF_SECONDS", 0.5)
     sleeps = []
-    monkeypatch.setattr(get_osm_data.time, "sleep", sleeps.append)
+    monkeypatch.setattr(overpass.time, "sleep", sleeps.append)
 
     class DummySession:
         def __init__(self):
@@ -110,7 +108,7 @@ def test_query_overpass_exhausts_retries_for_502(monkeypatch, tmp_path):
     session = DummySession()
 
     try:
-        get_osm_data.query_overpass(session=session)
+        overpass.query_overpass(session=session)
     except RuntimeError as exc:
         message = str(exc)
     else:
@@ -124,7 +122,7 @@ def test_query_overpass_exhausts_retries_for_502(monkeypatch, tmp_path):
 
 def test_process_osm_routes_data_writes_route_master_and_relation_csvs(monkeypatch, tmp_path):
         monkeypatch.chdir(tmp_path)
-        from transport_matcher.adapters import get_osm_data
+        from public_transport_matcher.adapters.osm_routes import process_osm_routes_data
 
         xml_data = """
         <osm version="0.6">
@@ -163,7 +161,7 @@ def test_process_osm_routes_data_writes_route_master_and_relation_csvs(monkeypat
         </osm>
         """
 
-        get_osm_data.process_osm_routes_data(xml_data, out_dir="data/processed")
+        process_osm_routes_data(xml_data, out_dir="data/processed")
 
         with open("data/processed/osm_route_masters.csv", encoding="utf-8", newline="") as handle:
                 route_master_rows = list(csv.DictReader(handle))
@@ -189,7 +187,7 @@ def test_process_osm_routes_data_writes_route_master_and_relation_csvs(monkeypat
 
 def test_process_osm_routes_data_deduplicates_duplicate_route_master_relation_members(monkeypatch, tmp_path):
         monkeypatch.chdir(tmp_path)
-        from transport_matcher.adapters import get_osm_data
+        from public_transport_matcher.adapters.osm_routes import process_osm_routes_data
 
         xml_data = """
         <osm version="0.6">
@@ -208,7 +206,7 @@ def test_process_osm_routes_data_deduplicates_duplicate_route_master_relation_me
         </osm>
         """
 
-        get_osm_data.process_osm_routes_data(xml_data, out_dir="data/processed")
+        process_osm_routes_data(xml_data, out_dir="data/processed")
 
         with open("data/processed/osm_route_master_members.csv", encoding="utf-8", newline="") as handle:
                 route_master_member_rows = list(csv.DictReader(handle))

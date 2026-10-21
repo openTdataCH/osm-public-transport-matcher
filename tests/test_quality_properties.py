@@ -9,12 +9,12 @@ from tempfile import TemporaryDirectory
 from hypothesis import given, settings, strategies as st
 import pytest
 
-from transport_matcher import SourceStop, OsmNode, match, write_bundle
-from transport_matcher.core.predicates.distance_matching import bipartite_match_max_cardinality
-from transport_matcher.core.utils.common import haversine_distance
-from transport_matcher.results import InvalidResult, validate_bundle, validate_output
-from transport_matcher.results.bundle import _json_value, _sections
-from transport_matcher.results.validation import validate_records
+from public_transport_matcher import SourceStop, OsmNode, match, write_bundle
+from public_transport_matcher.core.predicates.distance_matching import bipartite_match_max_cardinality
+from public_transport_matcher.core.utils.common import haversine_distance
+from public_transport_matcher.results import InvalidResult, validate_bundle, validate_output
+from public_transport_matcher.results.bundle import _json_value, _sections
+from public_transport_matcher.results.validation import validate_records
 
 IDENTIFIER = st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789", min_size=1, max_size=20)
 

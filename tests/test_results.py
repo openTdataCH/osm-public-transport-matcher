@@ -11,8 +11,8 @@ import threading
 
 import pytest
 
-from transport_matcher import __version__, match, SourceStop, OsmNode, write_bundle
-from transport_matcher.results import InvalidResult, validate_bundle
+from public_transport_matcher import __version__, match, SourceStop, OsmNode, write_bundle
+from public_transport_matcher.results import InvalidResult, validate_bundle
 
 
 def example():
@@ -100,7 +100,7 @@ def test_existing_directory_is_never_overwritten_even_when_empty(tmp_path):
 
 
 def test_publication_failure_cleans_up_temporary_directory(tmp_path, monkeypatch):
-    from transport_matcher.results import bundle
+    from public_transport_matcher.results import bundle
     def reject(*args):
         raise OSError('simulated publication failure')
     monkeypatch.setattr(bundle, '_publish_directory', reject)
@@ -110,7 +110,7 @@ def test_publication_failure_cleans_up_temporary_directory(tmp_path, monkeypatch
 
 
 def test_serialized_validation_failure_cleans_up_temporary_directory(tmp_path, monkeypatch):
-    from transport_matcher.results import validation
+    from public_transport_matcher.results import validation
     def reject(*args):
         raise InvalidResult('simulated serialization failure')
     monkeypatch.setattr(validation, 'validate_bundle', reject)
@@ -120,7 +120,7 @@ def test_serialized_validation_failure_cleans_up_temporary_directory(tmp_path, m
 
 
 def test_concurrent_writers_publish_exactly_one_complete_bundle(tmp_path, monkeypatch):
-    from transport_matcher.results import bundle
+    from public_transport_matcher.results import bundle
     original = bundle._publish_directory
     barrier = threading.Barrier(2)
     def together(temporary, destination):
@@ -156,7 +156,7 @@ def test_checksum_and_count_corruption_are_rejected(tmp_path):
 
 
 def test_optional_station_reference_keeps_original_osm_tag_fields(tmp_path):
-    from transport_matcher import MatchingProfile, ReferenceRule, Reference
+    from public_transport_matcher import MatchingProfile, ReferenceRule, Reference
     profile = MatchingProfile(
         station_reference_matching=True, osm_station_ref_tag='ref:local-station',
         reference_rules=(ReferenceRule('local-station', 'ref:local-station', scope='station'),),

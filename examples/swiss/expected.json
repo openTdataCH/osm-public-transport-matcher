@@ -178,7 +178,7 @@
   "line_family_matches": [
     {
       "id": 1,
-      "atlas_line_family_id": 1,
+      "source_line_family_id": 1,
       "osm_line_family_id": 2,
       "match_method": "normalized_gtfs_route_id"
     }
@@ -187,7 +187,7 @@
     {
       "id": 1,
       "line_family_match_id": 1,
-      "atlas_itinerary_id": 1,
+      "source_itinerary_id": 1,
       "osm_itinerary_id": 2,
       "direction_score": 1.0,
       "stop_score": 1.0,
@@ -195,6 +195,5 @@
       "overall_score": 1.0,
       "match_reason": "ordered_stop_match"
     }
-  ],
-  "baseline_commit": "e3e47b562e9a9141dfe6608a2ed0937945b4ff47"
+  ]
 }

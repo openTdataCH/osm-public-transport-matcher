@@ -3,9 +3,9 @@ import csv
 import pandas as pd
 import pytest
 
-from transport_matcher.adapters.gtfs_columnar import load_gtfs_columnar, iter_trip_patterns, write_cache, read_cache
-from transport_matcher.adapters.get_atlas_gtfs import load_gtfs_data_streaming
-from transport_matcher.swiss import _map_gtfs_products
+from public_transport_matcher.adapters.gtfs_columnar import load_gtfs_columnar, iter_trip_patterns, write_cache, read_cache
+from public_transport_matcher.adapters.get_atlas_gtfs import load_gtfs_data_streaming
+from public_transport_matcher.swiss import _map_gtfs_products
 
 
 def write(path, rows):
@@ -55,10 +55,10 @@ def canonical(frame):
     return frame.sort_values(list(frame.columns)).reset_index(drop=True)
 
 
-def test_columnar_matches_legacy_products_and_preserves_loops_and_foreign_termini(feed, tmp_path):
-    legacy_dir = tmp_path / 'legacy'
-    legacy_dir.mkdir()
-    old = load_gtfs_data_streaming(str(feed), stop_selector=selector, stage_dir=str(legacy_dir))
+def test_columnar_matches_pandas_reference_and_preserves_loops_and_foreign_termini(feed, tmp_path):
+    reference_dir = tmp_path / 'pandas'
+    reference_dir.mkdir()
+    old = load_gtfs_data_streaming(str(feed), stop_selector=selector, stage_dir=str(reference_dir))
     new = load_gtfs_columnar(feed, stop_selector=selector, stage_dir=tmp_path / 'native')
     assert new['trip_stop_times_row_count'] == old['trip_stop_times_row_count'] == 11
     assert len(list(iter_trip_patterns(new['trip_patterns_path']))) == 3
@@ -72,7 +72,7 @@ def test_columnar_matches_legacy_products_and_preserves_loops_and_foreign_termin
     for key in old_products:
         pd.testing.assert_frame_equal(canonical(old_products[key]), canonical(new_products[key]), check_dtype=False)
     assert old_identity == new_identity
-    calls = new_products['atlas_itinerary_stop_calls']
+    calls = new_products['source_stop_calls']
     assert calls['stop_sequence'].max() >= 3  # repeated Alpha call has survived
 
 

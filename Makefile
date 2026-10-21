@@ -1,6 +1,6 @@
 PYTHON ?= python3.13
 OUTPUT_DIR ?= quality/raw
-MUTATION_TARGET ?= transport_matcher.results.validation.*_position*
+MUTATION_TARGET ?= public_transport_matcher.results.validation.*_position*
 
 .PHONY: quality-fast quality-test quality quality-mutation
 

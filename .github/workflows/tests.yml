@@ -28,6 +28,6 @@ jobs:
       - name: Verify the installed package runs outside the checkout
         working-directory: /tmp
         run: >-
-          python -c 'from transport_matcher import SourceStop, OsmNode, match;
+          python -c 'from public_transport_matcher import SourceStop, OsmNode, match;
           assert match([SourceStop("demo", "1", 51.5, -0.1, name="A")],
           [OsmNode("1", 51.5, -0.1, name="A")]).matched'

@@ -1,7 +1,7 @@
 # Engine quality evidence
 
 This directory defines responsibility ownership and the evidence collected for
-`transport-matcher`. The engine can verify itself without the review application.
+`public-transport-matcher`. The engine can verify itself without the review application.
 The application combines both repositories' reports and runs the independent
 producer/consumer and PostGIS checks.
 
@@ -97,23 +97,21 @@ combined catalog check additionally resolves declared entry-point symbols and
 cross-repository contracts. A schema-valid catalog does not prove an invariant;
 its associated tests provide that evidence.
 
-## Source boundaries and public policy compatibility
+## Source boundaries and the public policy API
 
 Source-neutral policy dataclasses live in
-[core/profile.py](../src/transport_matcher/core/profile.py), alongside the
+[core/profile.py](../src/public_transport_matcher/core/profile.py), alongside the
 algorithms that consume them. This prevents generic algorithms from depending
 on a package that also selects Swiss-specific policies.
 
-`GroupingPolicy`, `MatchingProfile`, and `ReferenceRule` remain available through
-`transport_matcher.profiles` as aliases of the same class objects. The existing
-public `transport_matcher.MatchingProfile` and `ReferenceRule` imports also keep
-working. `transport_matcher.profiles.SWITZERLAND` remains the dataset profile.
-Importing the generic public API no longer imports that dataset-profile package
-implicitly. See the compatibility assertion in
-[test_architecture.py](../tests/test_architecture.py).
+`public_transport_matcher.profiles` re-exports `GroupingPolicy`, `MatchingProfile` and
+`ReferenceRule` next to the `SWITZERLAND` dataset profile, and
+`public_transport_matcher` exports `MatchingProfile` and `ReferenceRule`. Importing the
+generic public API does not import the dataset-profile package. See the
+assertions in [test_architecture.py](../tests/test_architecture.py).
 
 The engine's AST guard resolves absolute and relative static imports. Code under
-`src/transport_matcher/core` cannot import acquisition, adapters, integrations,
+`src/public_transport_matcher/core` cannot import acquisition, adapters, integrations,
 dataset profiles, results, Swiss composition, or the CLI. Every package source
 file is checked for imports of `backend` or `stop_sync_osm_atlas`. The combined
 app check also rejects review-framework dependencies from the engine and engine
@@ -149,7 +147,7 @@ policy aliases, and ownership discovery in Git checkouts and source archives.
 | `engine-mutation.json` | Selected mutation outcomes, counts, tool version, completion time, and provenance |
 | `engine-mutation.txt` | Human-readable selected mutation outcomes |
 
-Coverage is configured for all of `src/transport_matcher`, including source files
+Coverage is configured for all of `src/public_transport_matcher`, including source files
 that tests never import. Workflow/configuration/tooling ownership does not add
 those files to the runtime coverage denominator. The overall terminal coverage
 percentage combines statements and branches; the app dashboard reports module
@@ -175,10 +173,10 @@ make quality-mutation PYTHON=.venv/bin/python
 ```
 
 The exact default target is
-`transport_matcher.results.validation.*_position*`: the wire-coordinate
+`public_transport_matcher.results.validation.*_position*`: the wire-coordinate
 validator, within `engine.result-producer`. It is not a score for the full
 validator, matching engine, or application. The underlying configuration only
-mutates [results/validation.py](../src/transport_matcher/results/validation.py)
+mutates [results/validation.py](../src/public_transport_matcher/results/validation.py)
 and selects [test_results.py](../tests/test_results.py) plus
 [test_quality_properties.py](../tests/test_quality_properties.py). Mutmut may
 generate candidates for the whole configured file before executing the selected
@@ -188,7 +186,7 @@ To inspect the full configured validator instead:
 
 ```sh
 make quality-mutation PYTHON=.venv/bin/python \
-  MUTATION_TARGET='transport_matcher.results.validation.*'
+  MUTATION_TARGET='public_transport_matcher.results.validation.*'
 ```
 
 [mutation_report.py](mutation_report.py) captures the engine revision, target
@@ -207,7 +205,7 @@ is equivalent. Timeouts, missing tests, and other incomplete outcomes are not
 kills. To inspect a reported name without altering production source:
 
 ```sh
-.venv/bin/python -m mutmut show transport_matcher.results.validation.x__position__mutmut_1
+.venv/bin/python -m mutmut show public_transport_matcher.results.validation.x__position__mutmut_1
 .venv/bin/python -m mutmut browse
 ```
 

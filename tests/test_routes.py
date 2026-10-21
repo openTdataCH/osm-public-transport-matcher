@@ -1,6 +1,6 @@
-from transport_matcher.routes import (
+from public_transport_matcher.routes import (
     _build_itinerary_rows,
-    _align_stop_sequences,
+    _count_stop_sequence_matches,
     _resolve_osm_stop_fields,
     _score_itinerary_pair,
 )
@@ -16,83 +16,61 @@ def test_resolve_osm_stop_fields_prefers_stop_match_over_raw_uic_key():
         },
         {
             'osm_node_lookup': {},
-            'matched_osm_to_sloid': {'osm-1': 'ch:1:sloid:8500001:1'},
-            'unique_atlas_sloid_by_uic': {'8500001': 'ch:1:sloid:8500001:9'},
-            'atlas_stop_lookup': {},
+            'matched_osm_to_source_key': {'osm-1': 'atlas:ch:1:sloid:8500001:1'},
+            'unique_source_key_by_station_ref': {'8500001': 'atlas:ch:1:sloid:8500001:9'},
+            'source_stop_lookup': {},
         },
     )
 
-    assert resolved['canonical_stop_key'] == 'ch:1:sloid:8500001:1'
+    assert resolved['canonical_stop_key'] == 'atlas:ch:1:sloid:8500001:1'
+    assert resolved['station_ref'] == '8500001'
 
 
-def test_align_stop_sequences_counts_variant_sloid_matches_and_keeps_order():
-    atlas_calls = [
+def test_stop_sequence_matches_count_variant_keys_and_keep_order():
+    source_calls = [
         {
-            'source_sloid': 'ch:1:sloid:A:1',
-            'source_sloid_variants': '["ch:1:sloid:A:1", "ch:1:sloid:A:2"]',
-            'canonical_stop_key': 'ch:1:sloid:A:1',
-            'uic_ref': '8500001',
+            'source_stop_key': 'atlas:A:1',
+            'source_stop_key_variants': '["atlas:A:1", "atlas:A:2"]',
+            'canonical_stop_key': 'atlas:A:1',
+            'station_ref': '8500001',
         },
         {
-            'source_sloid': 'ch:1:sloid:B:1',
-            'source_sloid_variants': None,
-            'canonical_stop_key': 'ch:1:sloid:B:1',
-            'uic_ref': '8500002',
+            'source_stop_key': 'atlas:B:1',
+            'source_stop_key_variants': None,
+            'canonical_stop_key': 'atlas:B:1',
+            'station_ref': '8500002',
         },
         {
-            'source_sloid': 'ch:1:sloid:C:1',
-            'source_sloid_variants': None,
-            'canonical_stop_key': 'ch:1:sloid:C:1',
-            'uic_ref': '8500003',
+            'source_stop_key': 'atlas:C:1',
+            'source_stop_key_variants': None,
+            'canonical_stop_key': 'atlas:C:1',
+            'station_ref': '8500003',
         },
     ]
     osm_calls = [
-        {
-            'canonical_stop_key': 'ch:1:sloid:A:2',
-            'source_sloid': 'ch:1:sloid:A:2',
-            'uic_ref': '8500001',
-        },
-        {
-            'canonical_stop_key': 'osm:unmatched',
-            'uic_ref': '8500009',
-        },
-        {
-            'canonical_stop_key': 'ch:1:sloid:C:1',
-            'source_sloid': 'ch:1:sloid:C:1',
-            'uic_ref': '8500003',
-        },
+        {'canonical_stop_key': 'atlas:A:2', 'source_stop_key': 'atlas:A:2', 'station_ref': '8500001'},
+        {'canonical_stop_key': 'osm:unmatched', 'station_ref': '8500009'},
+        {'canonical_stop_key': 'atlas:C:1', 'source_stop_key': 'atlas:C:1', 'station_ref': '8500003'},
     ]
 
-    alignments, matched_stop_count = _align_stop_sequences(atlas_calls, osm_calls)
-
-    assert matched_stop_count == 2
-    alignment_types = [alignment['alignment_type'] for alignment in alignments]
-    assert alignment_types.count('resolved_sloid_match') == 2
-    assert alignment_types.count('atlas_only') == 1
-    assert alignment_types.count('osm_only') == 1
-    assert alignment_types[0] == 'resolved_sloid_match'
-    assert alignment_types[-1] == 'resolved_sloid_match'
+    assert _count_stop_sequence_matches(source_calls, osm_calls) == 2
+    assert _count_stop_sequence_matches(source_calls, list(reversed(osm_calls))) == 1
 
 
 def test_score_itinerary_pair_requires_exact_direction_and_80_percent_stop_ratio():
-    atlas_itinerary = {'direction_id': '0'}
+    source_itinerary = {'direction_id': '0'}
     osm_itinerary = {'direction_id': '0'}
-    atlas_calls = [
-        {'source_sloid': 'ch:1:sloid:1', 'source_sloid_variants': None, 'canonical_stop_key': 'ch:1:sloid:1', 'uic_ref': '8500001'},
-        {'source_sloid': 'ch:1:sloid:2', 'source_sloid_variants': None, 'canonical_stop_key': 'ch:1:sloid:2', 'uic_ref': '8500002'},
-        {'source_sloid': 'ch:1:sloid:3', 'source_sloid_variants': None, 'canonical_stop_key': 'ch:1:sloid:3', 'uic_ref': '8500003'},
-        {'source_sloid': 'ch:1:sloid:4', 'source_sloid_variants': None, 'canonical_stop_key': 'ch:1:sloid:4', 'uic_ref': '8500004'},
-        {'source_sloid': 'ch:1:sloid:5', 'source_sloid_variants': None, 'canonical_stop_key': 'ch:1:sloid:5', 'uic_ref': '8500005'},
+    source_calls = [
+        {'source_stop_key': f'atlas:{index}', 'source_stop_key_variants': None,
+         'canonical_stop_key': f'atlas:{index}', 'station_ref': f'850000{index}'}
+        for index in range(1, 6)
     ]
     osm_calls = [
-        {'source_sloid': 'ch:1:sloid:1', 'canonical_stop_key': 'ch:1:sloid:1', 'uic_ref': '8500001'},
-        {'source_sloid': 'ch:1:sloid:2', 'canonical_stop_key': 'ch:1:sloid:2', 'uic_ref': '8500002'},
-        {'source_sloid': 'ch:1:sloid:3', 'canonical_stop_key': 'ch:1:sloid:3', 'uic_ref': '8500003'},
-        {'source_sloid': 'ch:1:sloid:4', 'canonical_stop_key': 'ch:1:sloid:4', 'uic_ref': '8500004'},
-        {'canonical_stop_key': 'osm:unmatched', 'uic_ref': '8509999'},
-    ]
+        {'source_stop_key': f'atlas:{index}', 'canonical_stop_key': f'atlas:{index}', 'station_ref': f'850000{index}'}
+        for index in range(1, 5)
+    ] + [{'canonical_stop_key': 'osm:unmatched', 'station_ref': '8509999'}]
 
-    score_row = _score_itinerary_pair(atlas_itinerary, osm_itinerary, atlas_calls, osm_calls)
+    score_row = _score_itinerary_pair(source_itinerary, osm_itinerary, source_calls, osm_calls)
 
     assert score_row['matched_stop_count'] == 4
     assert score_row['stop_score'] == 0.8
@@ -101,36 +79,32 @@ def test_score_itinerary_pair_requires_exact_direction_and_80_percent_stop_ratio
     assert score_row['match_reason'] == 'ordered_stop_match'
 
 
-def test_score_itinerary_pair_uses_uic_fallback_only_without_resolved_identity():
-    atlas_itinerary = {'direction_id': '1'}
+def test_score_itinerary_pair_uses_station_reference_only_without_resolved_identity():
+    source_itinerary = {'direction_id': '1'}
     osm_itinerary = {'direction_id': '1'}
-    atlas_calls = [
-        {
-            'source_sloid': None,
-            'source_sloid_variants': None,
-            'canonical_stop_key': 'gtfs:stop-1',
-            'uic_ref': '8500100',
-        }
-    ]
-    osm_calls = [
-        {
-            'canonical_stop_key': 'uic:8500100',
-            'uic_ref': '8500100',
-        }
-    ]
+    source_calls = [{
+        'source_stop_key': None,
+        'source_stop_key_variants': None,
+        'canonical_stop_key': 'stop-1',
+        'station_ref': '8500100',
+    }]
+    osm_calls = [{'canonical_stop_key': 'uic:8500100', 'station_ref': '8500100'}]
 
-    score_row = _score_itinerary_pair(atlas_itinerary, osm_itinerary, atlas_calls, osm_calls)
+    score_row = _score_itinerary_pair(source_itinerary, osm_itinerary, source_calls, osm_calls)
 
     assert score_row['matched_stop_count'] == 1
     assert score_row['is_eligible'] is True
-    assert score_row['alignments'][0]['alignment_type'] == 'uic_match'
+
+    resolved_elsewhere = [{**source_calls[0], 'source_stop_key': 'atlas:other'}]
+    osm_resolved = [{**osm_calls[0], 'source_stop_key': 'atlas:this'}]
+    assert _score_itinerary_pair(source_itinerary, osm_itinerary, resolved_elsewhere, osm_resolved)['matched_stop_count'] == 0
 
 
 def test_build_itinerary_rows_prefers_osm_from_to_for_display_and_to_for_headsign():
     itinerary_rows, _, _ = _build_itinerary_rows(
         {
-            'atlas_itineraries': [],
-            'atlas_itinerary_stop_calls': [],
+            'itineraries': [],
+            'stop_calls': [],
         },
         {
             'osm_route_relations': [
@@ -152,7 +126,7 @@ def test_build_itinerary_rows_prefers_osm_from_to_for_display_and_to_for_headsig
                     'osm_node_id': '100',
                     'stop_role': 'platform',
                     'stop_label': 'Zurich HB',
-                    'uic_ref': '8503000',
+                    'station_ref': '8503000',
                     'stop_lat': None,
                     'stop_lon': None,
                 }
@@ -164,36 +138,50 @@ def test_build_itinerary_rows_prefers_osm_from_to_for_display_and_to_for_headsig
 
     osm_itinerary = itinerary_rows[0]
 
+    assert osm_itinerary['side'] == 'osm'
+    assert osm_itinerary['key'] == '300'
     assert osm_itinerary['display_name'] == 'Zurich HB -> Kienastenwies'
     assert osm_itinerary['representative_headsign'] == 'Kienastenwies'
 
+
 def test_indexed_family_candidates_equal_exhaustive_scoring():
     import random
-    from transport_matcher.routes import _candidate_line_family_pairs, _score_line_family_pair
+    from public_transport_matcher.routes import _candidate_line_family_pairs, _score_line_family_pair
     rng = random.Random(173)
-    atlas = [dict(id=i, source='atlas', gtfs_route_id=rng.choice(['R1', 'R2', 'R3', None]),
-                  normalized_route_id=rng.choice(['N1', 'N2', None])) for i in range(1, 31)]
-    osm = [dict(id=i, source='osm', gtfs_route_id=rng.choice(['R1', 'R2', 'R3', None]),
+    source = [dict(id=i, side='source', gtfs_route_id=rng.choice(['R1', 'R2', 'R3', None]),
+                   normalized_route_id=rng.choice(['N1', 'N2', None])) for i in range(1, 31)]
+    osm = [dict(id=i, side='osm', gtfs_route_id=rng.choice(['R1', 'R2', 'R3', None]),
                 normalized_route_id=rng.choice(['N1', 'N2', None]),
                 display_route_id=rng.choice(['R1', 'R3', None]), is_non_gtfs=i % 7 == 0)
            for i in range(40, 90)]
     exhaustive = []
-    for a in atlas:
+    for a in source:
         for o in osm:
             score, reason = _score_line_family_pair(a, o)
             if score and not o['is_non_gtfs']:
                 exhaustive.append((score, a['id'], o['id'], reason))
-    indexed = [(score, a['id'], o['id'], reason) for score, a, o, reason in _candidate_line_family_pairs(atlas, osm)]
+    indexed = [(score, a['id'], o['id'], reason) for score, a, o, reason in _candidate_line_family_pairs(source, osm)]
     assert sorted(indexed) == sorted(exhaustive)
 
 
-def test_score_only_alignment_matches_traceback_for_repeated_and_conflicting_identities():
+def test_stop_sequence_matches_equal_exhaustive_longest_common_subsequence():
     import random
-    from transport_matcher.routes import _align_stop_sequences, _count_stop_sequence_matches
+    from functools import lru_cache
+    from public_transport_matcher.routes import _same_stop, _stop_identity
     rng = random.Random(93)
-    pool = [{'source_sloid': 'a', 'uic_ref': '1'}, {'source_sloid': 'b', 'uic_ref': '1'},
-            {'source_sloid_variants': '["a", "c"]'}, {'uic_ref': '1'}, {}, {'uic_ref': '2'}]
+    pool = [{'source_stop_key': 'a', 'station_ref': '1'}, {'source_stop_key': 'b', 'station_ref': '1'},
+            {'source_stop_key_variants': '["a", "c"]'}, {'station_ref': '1'}, {}, {'station_ref': '2'}]
     for _ in range(100):
-        a = rng.choices(pool, k=rng.randrange(20))
-        b = rng.choices(pool, k=rng.randrange(20))
-        assert _count_stop_sequence_matches(a, b) == _align_stop_sequences(a, b)[1]
+        a = rng.choices(pool, k=rng.randrange(12))
+        b = rng.choices(pool, k=rng.randrange(12))
+
+        @lru_cache(maxsize=None)
+        def lcs(i, j):
+            if i == len(a) or j == len(b):
+                return 0
+            best = max(lcs(i + 1, j), lcs(i, j + 1))
+            if _same_stop(_stop_identity(a[i]), _stop_identity(b[j])):
+                best = max(best, 1 + lcs(i + 1, j + 1))
+            return best
+
+        assert _count_stop_sequence_matches(a, b) == lcs(0, 0)

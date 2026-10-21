@@ -13,7 +13,7 @@ Two independent version numbers appear in every manifest:
 | Field | Example | Changes when |
 |---|---|---|
 | `schema_version` | `1` | The meaning or required shape of a field changes. Consumers reject versions they do not support. |
-| `engine_version` | `0.1.1` | The engine is released, including matching changes that keep the format. |
+| `engine_version` | `0.2.0` | The engine is released, including matching changes that keep the format. |
 
 Adding optional metadata is compatible: consumers ignore what they do not know. Any other change needs a new schema version and a coordinated consumer release. `tests/fixtures/result-v1` in the review application repository is the consumer compatibility fixture.
 
@@ -40,7 +40,7 @@ No Python pickle, ORM object, credential or path needed for reading crosses the 
 ```json
 {
   "schema_version": 1,
-  "engine_version": "0.1.1",
+  "engine_version": "0.2.0",
   "run_id": "a-unique-run-identifier",
   "generated_at": "2026-09-11T12:00:00+00:00",
   "profile_id": "generic",
@@ -70,7 +70,7 @@ Rows refer to entities by key, never by position.
 - **Source keys** are `<namespace>:<source_id>`, for example `atlas:ch:1:sloid:3000:501:33`. A namespace never contains a colon, so equal raw identifiers from different feeds stay distinct. `references` lists the stop's identifiers as `{namespace, value, scope}` objects.
 - **OSM keys** include the element type: `osm:node:123`, `osm:way:123`, `osm:relation:123`. The `node_id` field keeps the adapter's convention, in which non-node elements carry a type prefix (`way_123`), so that group members stay unambiguous. A positioned way is represented by one point; the format does not describe full geometries.
 - **Coordinates** are finite WGS84 latitude and longitude. `(0, 0)` is a valid position, not a missing value.
-- **`station_reference`** is an optional normalized station value, chosen by the profile's `osm_station_ref_tag`. The original `tags` and `uic_ref` are kept unchanged; display code should use them. Older schema-1 bundles may omit this field.
+- **`station_reference`** is an optional normalized station value, chosen by the profile's `osm_station_ref_tag`. The original `tags` and `uic_ref` are kept unchanged; display code should use them.
 
 ## Matches and unmatched entities
 
@@ -94,13 +94,26 @@ Each match row repeats the problems of that pair (type, priority and duplicate f
 
 ## Routes
 
-The `routes` section holds one row per collection: `atlas_line_families`, `osm_route_relations`, `line_families`, `itineraries`, `stop_calls`, `line_family_matches`, `itinerary_matches`, and summary counters such as `matched_routes` and `skipped_sloids`. Each `value` is the complete collection.
+The `routes` section holds one row per collection. Each `value` is the complete collection:
 
-- Families, itineraries, stop calls and their matches have integer IDs that are valid only inside the bundle. Itineraries refer to family IDs, stop calls to itinerary IDs, and match rows to both sides. Use source entity keys, not these IDs, to recognise something across runs.
-- A stop call carries a resolved `source_sloid` (and JSON-encoded `source_sloid_variants`) or a `source_node_id`, plus its position, label and sequence number.
-- The `atlas_*` and `*_sloid` names are schema-1 compatibility names. They describe the source side of any feed, and their values are engine source keys. Generic adapters use `source_*` names internally; the schema-1 writer maps them. Only a future schema version can rename them.
+| `kind` | One row per | Principal fields |
+|---|---|---|
+| `source_routes` | route of the source timetable | `route_id`, `route_id_normalized`, `agency_id`, `route_short_name`, `route_long_name`, `route_desc`, `route_type` |
+| `osm_route_relations` | OSM `type=route` relation | `relation_id`, `route`, `ref`, `name`, `from_name`, `to_name`, `operator`, `network`, `gtfs_route_id`, `route_master_id` and further PTv2 tags |
+| `line_families` | line on either side | `id`, `side`, `key`, `family_origin`, `public_name`, `ref`, `operator`, `gtfs_route_id`, `normalized_route_id`, `display_route_id` |
+| `itineraries` | direction or variant on either side | `id`, `side`, `key`, `line_family_id`, `direction_id`, `display_name`, `trip_count`, `canonical_stop_count` |
+| `stop_calls` | stop of an itinerary, in order | `id`, `itinerary_id`, `stop_sequence`, `source_stop_id`, `source_stop_key`, `source_stop_key_variants`, `osm_node_id`, `canonical_stop_key`, `stop_label`, `station_ref`, position |
+| `line_family_matches` | matched pair of families | `id`, `source_line_family_id`, `osm_line_family_id`, `match_method` |
+| `itinerary_matches` | matched pair of itineraries | `id`, `line_family_match_id`, `source_itinerary_id`, `osm_itinerary_id`, the scores, `match_reason` |
 
-`src/transport_matcher/routes.py` defines the detailed route fields and `src/transport_matcher/results/validation.py` checks them. The route model is explained in [E3 Routes](3.%20Routes.md).
+Two counters complete the section: `matched_routes`, the number of family matches, and `unknown_source_stop_references`, the number of source stop calls whose stop is not among the bundle's source stops.
+
+- `side` is `source` or `osm`, as in `unmatched` and `groups`.
+- Families, itineraries, stop calls and their matches have integer `id`s that are valid only inside the bundle. Itineraries refer to family IDs, stop calls to itinerary IDs, and match rows to both sides.
+- A family's `key` is the source `route_id`, or for OSM the route master ID, normalized `gtfs:route_id`, synthetic key or relation ID, as `family_origin` states. An itinerary's `key` is the source itinerary ID or the OSM relation ID. Together with `side` (and `family_origin` for families), the key recognises the same line or direction in another run.
+- A stop call's `source_stop_key` is a source stop key from this bundle, or empty. `source_stop_key_variants` is a JSON-encoded list of further source stop keys that the call stands for. OSM stop calls carry their `osm_node_id`, and a `source_stop_key` when the node was matched to a source stop.
+
+`src/public_transport_matcher/routes.py` defines the detailed route fields and `src/public_transport_matcher/results/validation.py` checks them. The route model is explained in [E3 Routes](3.%20Routes.md).
 
 ## Extensions
 

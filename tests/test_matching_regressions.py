@@ -5,27 +5,26 @@ from __future__ import annotations
 
 import pytest
 
-from transport_matcher.core.models import SourceStop, Reference, MatchRecord, OsmNode
-from transport_matcher.core.pipeline import MatchingContext, run_pipeline
-from transport_matcher.core.predicates import BasePredicate
-from transport_matcher.core.predicates.distance_matching import (
+from public_transport_matcher.core.models import SourceStop, Reference, MatchRecord, OsmNode
+from public_transport_matcher.core.pipeline import MatchingContext, run_pipeline
+from public_transport_matcher.core.predicates import BasePredicate
+from public_transport_matcher.core.predicates.distance_matching import (
     NearestDistancePredicate,
-    bipartite_match,
     bipartite_match_max_cardinality,
     GroupProximityPredicate,
 )
-from transport_matcher.core.predicates.exact_matching import ExactUicPredicate
-from transport_matcher.core.predicates.name_matching import NameMatchPredicate
-from transport_matcher.core.predicates.trio_distance_matching import TrioDistanceMatchingPredicate
-from transport_matcher.core.predicates.route_matching_gtfs import RouteMatchPredicate
-from transport_matcher.api import _predicates
-from transport_matcher.profiles import SWITZERLAND
+from public_transport_matcher.core.predicates.exact_matching import ExactReferencePredicate
+from public_transport_matcher.core.predicates.name_matching import NameMatchPredicate
+from public_transport_matcher.core.predicates.trio_distance_matching import TrioDistanceMatchingPredicate
+from public_transport_matcher.core.predicates.route_matching_gtfs import RouteMatchPredicate
+from public_transport_matcher.api import _predicates
+from public_transport_matcher.profiles import SWITZERLAND
 DEFAULT_PIPELINE = _predicates(SWITZERLAND)
-from transport_matcher.core.problem_detection.context import ProblemContext
-from transport_matcher.core.problem_detection.stop_predicates import contradicts_route_matching_problem
-from transport_matcher.core.state import SourceState, OsmState
-from transport_matcher.core.utils.common import haversine_distance
-from transport_matcher.profiles.switzerland import normalize_route_id
+from public_transport_matcher.core.problem_detection.context import ProblemContext
+from public_transport_matcher.core.problem_detection.stop_predicates import contradicts_route_matching_problem
+from public_transport_matcher.core.state import SourceState, OsmState
+from public_transport_matcher.core.utils.common import haversine_distance
+from public_transport_matcher.profiles.switzerland import normalize_route_id
 
 
 def _source_stop(source_id, lat, lon, station_ref, platform_code, name, operator):
@@ -151,28 +150,6 @@ class TestDefaultPipeline:
 
 
 class TestBipartiteMatch:
-    def test_equal_size_conflict_free(self):
-        atlas = [
-            _source_stop('a1', 47.0, 8.0, 'u1', '1', 'A', 'T'),
-            _source_stop('a2', 47.0005, 8.0005, 'u1', '2', 'A', 'T'),
-        ]
-        osm = [
-            OsmNode('o1', 47.0001, 8.0001, None, 'A', None, 'u1', '', '', 'stop_position', None, None, None, {}),
-            OsmNode('o2', 47.0006, 8.0006, None, 'A', None, 'u1', '', '', 'stop_position', None, None, None, {}),
-        ]
-
-        pairs = bipartite_match(atlas, osm, max_distance=100)
-        assert len(pairs) == 2
-
-    def test_unequal_size_returns_empty(self):
-        atlas = [_source_stop('a1', 47.0, 8.0, 'u1', '1', 'A', 'T')]
-        osm = [
-            OsmNode('o1', 47.0001, 8.0001, None, 'A', None, 'u1', '', '', 'stop_position', None, None, None, {}),
-            OsmNode('o2', 47.1, 8.1, None, 'A', None, 'u1', '', '', 'stop_position', None, None, None, {}),
-        ]
-
-        assert bipartite_match(atlas, osm, max_distance=100) == []
-
     def test_max_cardinality_allows_partial_matching(self):
         atlas = [
             _source_stop('a1', 47.0000, 8.0000, 'u1', '1', 'A', 'T'),
@@ -231,7 +208,7 @@ class TestCurrentPredicates:
             [_osm_entry('osm_1', 47.3770, 8.5418, uic_ref='8503000', name='Zürich HB')],
         )
 
-        ExactUicPredicate().run(ctx)
+        ExactReferencePredicate().run(ctx)
 
         assert [(record.source_node.source_id, record.osm_node.node_id, record.match_type) for record in ctx.all_matches] == [
             ('s1', 'osm_1', 'exact')
@@ -768,7 +745,7 @@ class TestOsmTrioMatching:
         )
         ctx.osm.build_groups(source_uic_counts={'u_trio': 2})
 
-        run_pipeline([TrioDistanceMatchingPredicate(), ExactUicPredicate(), NameMatchPredicate()], ctx)
+        run_pipeline([TrioDistanceMatchingPredicate(), ExactReferencePredicate(), NameMatchPredicate()], ctx)
 
         trio_records = [r for r in ctx.all_matches if r.match_type == 'distance_matching_trio']
         matched_osm_ids = {r.osm_node.node_id for r in trio_records}

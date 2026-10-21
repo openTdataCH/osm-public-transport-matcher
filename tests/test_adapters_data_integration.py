@@ -9,29 +9,26 @@ from datetime import date
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from transport_matcher.adapters.get_atlas_data import (
+from public_transport_matcher.adapters.get_atlas_data import (
     ATLAS_ACTUAL_DATE_RESOURCE_PERMALINK,
-    _build_atlas_itinerary_frames,
+    _build_itinerary_frames,
     get_atlas_stops,
     get_current_gtfs_permalink,
-    write_atlas_route_csvs,
+    swiss_route_products,
 )
 
 class TestGtfsRoutesIntegration:
-    """Tests for the entity-first GTFS route CSV generation."""
+    """Tests for the Swiss source route products built from integrated GTFS data."""
 
     def test_gtfs_precomputed_integration_is_used(self, tmp_path):
         """
         Verify that precomputed integrated GTFS data is correctly used.
         
-        This ensures that when the pipeline provides already-processed GTFS data,
-        it is successfully written to the output file without being re-processed
-        or ignored.
+        Integrated GTFS rows become routes, itineraries and stop calls
+        without being re-processed or ignored.
         """
         # 1. Setup Mock Data
         
-        # Traffic points (needed by input signature, but not used if integrated keys are present)
-        traffic_points = pd.DataFrame({'sloid': []})
         stop_times_path = tmp_path / "trip_stop_times.csv"
         pd.DataFrame([
             {'trip_id': 'trip-1', 'stop_id': 'stop-1a', 'stop_sequence': 1},
@@ -112,29 +109,16 @@ class TestGtfsRoutesIntegration:
         ])
         
         # 2. Execute Function
-        write_atlas_route_csvs(
-            gtfs_data=gtfs_stream,
-            traffic_points=traffic_points,
-            integrated_gtfs_data=integrated_gtfs_data,
-            out_dir=str(tmp_path)
-        )
-        
+        products = swiss_route_products(gtfs_stream, integrated_gtfs_data)
+
         # 3. Verify Output
-        line_families_file = tmp_path / "atlas_line_families.csv"
-        itineraries_file = tmp_path / "atlas_itineraries.csv"
-        stop_calls_file = tmp_path / "atlas_itinerary_stop_calls.csv"
+        routes_df = products['source_routes']
+        itineraries_df = products['source_itineraries']
+        stop_calls_df = products['source_stop_calls']
 
-        assert line_families_file.exists(), "ATLAS line families CSV was not created"
-        assert itineraries_file.exists(), "ATLAS itineraries CSV was not created"
-        assert stop_calls_file.exists(), "ATLAS itinerary stop calls CSV was not created"
-
-        line_families_df = pd.read_csv(line_families_file)
-        itineraries_df = pd.read_csv(itineraries_file)
-        stop_calls_df = pd.read_csv(stop_calls_file)
-
-        assert len(line_families_df) == 2, f"Expected 2 line-family rows, got {len(line_families_df)}"
+        assert len(routes_df) == 2, f"Expected 2 route rows, got {len(routes_df)}"
         expected_route_cols = {
-            'atlas_line_id',
+            'route_id',
             'agency_id',
             'route_id_normalized',
             'route_short_name',
@@ -142,14 +126,13 @@ class TestGtfsRoutesIntegration:
             'route_desc',
             'route_type',
         }
-        assert expected_route_cols.issubset(set(line_families_df.columns)), "Line-family columns are missing"
-        assert 'gtfs-route-1' in line_families_df['atlas_line_id'].values
-        assert 'gtfs-route-2' in line_families_df['atlas_line_id'].values
+        assert expected_route_cols.issubset(set(routes_df.columns)), "Route columns are missing"
+        assert set(routes_df['route_id']) == {'gtfs-route-1', 'gtfs-route-2'}
 
         assert len(itineraries_df) == 2, f"Expected 2 itinerary rows, got {len(itineraries_df)}"
         expected_direction_cols = {
-            'atlas_itinerary_id',
-            'atlas_line_id',
+            'itinerary_id',
+            'route_id',
             'direction_id',
             'representative_headsign',
             'direction_label',
@@ -157,21 +140,20 @@ class TestGtfsRoutesIntegration:
         assert expected_direction_cols.issubset(set(itineraries_df.columns)), "Itinerary columns are missing"
         assert set(itineraries_df['direction_label']) == {'Alpha -> Beta', 'Gamma -> Delta'}
 
-        assert len(stop_calls_df) == 4, f"Expected 4 itinerary stop-call rows, got {len(stop_calls_df)}"
+        assert len(stop_calls_df) == 4, f"Expected 4 stop-call rows, got {len(stop_calls_df)}"
         expected_stop_cols = {
-            'atlas_itinerary_id',
-            'sloid',
-            'stop_id',
+            'itinerary_id',
+            'source_stop_key',
+            'source_stop_id',
             'stop_sequence',
             'mapping_method',
         }
-        assert expected_stop_cols.issubset(set(stop_calls_df.columns)), "Itinerary stop-call columns are missing"
-        assert set(stop_calls_df['sloid']) == {'ch:1:sloid:1a', 'ch:1:sloid:1b', 'ch:1:sloid:2a', 'ch:1:sloid:2b'}
+        assert expected_stop_cols.issubset(set(stop_calls_df.columns)), "Stop-call columns are missing"
+        assert set(stop_calls_df['source_stop_key']) == {'ch:1:sloid:1a', 'ch:1:sloid:1b', 'ch:1:sloid:2a', 'ch:1:sloid:2b'}
         assert set(stop_calls_df['mapping_method']) == {'strict', 'coordinate_proximity'}
 
     def test_gtfs_only_integration(self, tmp_path):
-        """Test that GTFS routes output writes entity-first GTFS files only."""
-        traffic_points = pd.DataFrame({'sloid': []})
+        """Integrated rows without staged trips still produce route products."""
         gtfs_stream = {}
         
         # GTFS Input
@@ -190,21 +172,14 @@ class TestGtfsRoutesIntegration:
         }])
         
         # Execute
-        write_atlas_route_csvs(
-            gtfs_data=gtfs_stream,
-            traffic_points=traffic_points,
-            integrated_gtfs_data=integrated_gtfs,
-            out_dir=str(tmp_path)
-        )
-        
+        products = swiss_route_products(gtfs_stream, integrated_gtfs)
+
         # Verify
-        line_families = pd.read_csv(tmp_path / "atlas_line_families.csv")
-        itineraries = pd.read_csv(tmp_path / "atlas_itineraries.csv")
-        stop_calls = pd.read_csv(tmp_path / "atlas_itinerary_stop_calls.csv")
-        assert len(line_families) == 1
-        assert len(itineraries) == 1
+        stop_calls = products['source_stop_calls']
+        assert len(products['source_routes']) == 1
+        assert len(products['source_itineraries']) == 1
         assert len(stop_calls) == 1
-        assert stop_calls.iloc[0]['sloid'] == 'ch:1:sloid:1'
+        assert stop_calls.iloc[0]['source_stop_key'] == 'ch:1:sloid:1'
         assert stop_calls.iloc[0]['mapping_method'] == 'unique_number'
 
 
@@ -220,7 +195,7 @@ def test_gtfs_permalink_links_do_not_contain_stale_years():
     current_year = str(date.today().year)
     link_pattern = re.compile(r"timetable-(\d{4})-gtfs2020")
 
-    import transport_matcher.adapters.get_atlas_data as atlas_adapter
+    import public_transport_matcher.adapters.get_atlas_data as atlas_adapter
     checked_files = [Path(atlas_adapter.__file__)]
 
     stale_hits = []
@@ -252,8 +227,8 @@ def test_get_atlas_stops_accepts_plain_csv_payload_with_bom(tmp_path):
 
     output_path = tmp_path / "stops_ATLAS.csv"
 
-    with patch("transport_matcher.adapters.get_atlas_data.requests.get", return_value=mocked_response), patch(
-        "transport_matcher.adapters.get_atlas_data.filter_points_in_switzerland",
+    with patch("public_transport_matcher.adapters.get_atlas_data.requests.get", return_value=mocked_response), patch(
+        "public_transport_matcher.adapters.get_atlas_data.filter_points_in_switzerland",
         side_effect=lambda df, lat_col, lon_col: df,
     ):
         stats = get_atlas_stops(str(output_path), ATLAS_ACTUAL_DATE_RESOURCE_PERMALINK)
@@ -266,7 +241,7 @@ def test_get_atlas_stops_accepts_plain_csv_payload_with_bom(tmp_path):
     assert stats["after_type_filter"] == 1
 
 
-def test_atlas_itineraries_collapse_same_uic_sequence_and_keep_sloid_variants(tmp_path):
+def test_swiss_itineraries_collapse_same_uic_sequence_and_keep_sloid_variants(tmp_path):
     stop_times_path = tmp_path / "trip_stop_times.csv"
     pd.DataFrame([
         {'trip_id': 'trip-1', 'stop_id': '8501000:0:A', 'stop_sequence': 1},
@@ -293,7 +268,7 @@ def test_atlas_itineraries_collapse_same_uic_sequence_and_keep_sloid_variants(tm
         {'stop_id': '8502000:0:B', 'sloid': 'ch:1:sloid:B', 'match_method': 'uic_platform'},
     ])
 
-    itineraries_df, stop_calls_df = _build_atlas_itinerary_frames(gtfs_data, integrated)
+    itineraries_df, stop_calls_df = _build_itinerary_frames(gtfs_data, integrated)
 
     assert len(itineraries_df) == 1
     assert int(itineraries_df.iloc[0]['trip_count']) == 2
@@ -301,10 +276,10 @@ def test_atlas_itineraries_collapse_same_uic_sequence_and_keep_sloid_variants(tm
     assert len(stop_calls_df) == 2
 
     first_stop = stop_calls_df.sort_values(by='stop_sequence').iloc[0]
-    assert json.loads(first_stop['sloid_variants']) == ['ch:1:sloid:A', 'ch:1:sloid:C']
+    assert json.loads(first_stop['source_stop_key_variants']) == ['ch:1:sloid:A', 'ch:1:sloid:C']
 
 
-def test_atlas_itineraries_keep_distinct_patterns_when_headsign_missing(tmp_path):
+def test_swiss_itineraries_keep_distinct_patterns_when_headsign_missing(tmp_path):
     stop_times_path = tmp_path / "trip_stop_times.csv"
     pd.DataFrame([
         {'trip_id': 'trip-1', 'stop_id': '8501000:0:A', 'stop_sequence': 1},
@@ -331,14 +306,14 @@ def test_atlas_itineraries_keep_distinct_patterns_when_headsign_missing(tmp_path
         {'stop_id': '8503000:0:C', 'sloid': 'ch:1:sloid:C', 'match_method': 'uic_platform'},
     ])
 
-    itineraries_df, stop_calls_df = _build_atlas_itinerary_frames(gtfs_data, integrated)
+    itineraries_df, stop_calls_df = _build_itinerary_frames(gtfs_data, integrated)
 
     assert len(itineraries_df) == 2
     assert len(stop_calls_df) == 4
     assert set(itineraries_df['direction_label']) == {'Alpha -> Beta', 'Alpha -> Gamma'}
 
 
-def test_atlas_itinerary_direction_label_uses_dominant_uic_subsequence(tmp_path):
+def test_swiss_itinerary_direction_label_uses_dominant_uic_subsequence(tmp_path):
     stop_times_path = tmp_path / "trip_stop_times.csv"
     pd.DataFrame([
         {'trip_id': 'trip-1', 'stop_id': '8501000:0:minor', 'stop_sequence': 1},
@@ -375,7 +350,7 @@ def test_atlas_itinerary_direction_label_uses_dominant_uic_subsequence(tmp_path)
         {'stop_id': '8502000:0:main', 'sloid': 'ch:1:sloid:main-end', 'match_method': 'uic_platform'},
     ])
 
-    itineraries_df, stop_calls_df = _build_atlas_itinerary_frames(gtfs_data, integrated)
+    itineraries_df, stop_calls_df = _build_itinerary_frames(gtfs_data, integrated)
 
     assert len(itineraries_df) == 1
     assert len(stop_calls_df) == 2

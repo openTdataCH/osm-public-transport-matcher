@@ -3,9 +3,9 @@ import shutil
 
 import pytest
 
-from transport_matcher.adapters import acquisition
-from transport_matcher.adapters.source_freshness import source_snapshot_is_unchanged
-from transport_matcher.progress import progress_reporting
+from public_transport_matcher.adapters import acquisition
+from public_transport_matcher.adapters.source_freshness import source_snapshot_is_unchanged
+from public_transport_matcher.progress import progress_reporting
 from test_progress import public_events
 
 
@@ -17,8 +17,8 @@ def sources(tmp_path, monkeypatch):
     monkeypatch.setattr(acquisition, 'probe_remote_source', lambda label, url: {
         'label': label, 'url': url, 'probe_ok': True, 'etag': versions[label]})
     monkeypatch.setattr(acquisition, '_ensure_swiss_geojson_cache', lambda path, **kw: Path(path).write_text('{}'))
-    import transport_matcher.swiss
-    monkeypatch.setattr(transport_matcher.swiss, '_boundary_selector', lambda path: lambda frame: frame.copy())
+    import public_transport_matcher.swiss
+    monkeypatch.setattr(public_transport_matcher.swiss, '_boundary_selector', lambda path: lambda frame: frame.copy())
 
     def atlas(path, url, **kw):
         calls['atlas'] += 1
@@ -57,7 +57,7 @@ def test_refresh_reuses_verified_layers_and_always_refreshes_osm(tmp_path, sourc
     assert reused == {'atlas.prepare', 'timetable.download', 'timetable.patterns', 'timetable.identities_routes'}
     assert {e['stage_id'] for e in warm if e['event'] == 'stage_started'} == {'source_check.remote_sources', 'osm.download'}
     assert calls == {'atlas': 1, 'gtfs': 1, 'osm': 2}
-    (tmp_path / 'data/processed/atlas_itineraries.csv').write_text('corrupted')
+    (tmp_path / 'data/processed/source_itineraries.csv').write_text('corrupted')
     third = refresh(tmp_path)
     assert third['cache_decisions']['gtfs_atlas'] == 'products_missing_or_changed'
     assert third['cache_decisions']['gtfs'] == 'hit'
@@ -171,7 +171,7 @@ def test_corrupt_parsed_cache_reuses_verified_download(tmp_path, sources, capsys
 
 @pytest.mark.parametrize('local_feed', [False, True])
 def test_full_cli_plan_resolves_on_cold_and_warm_runs(tmp_path, sources, capsys, local_feed):
-    from transport_matcher.cli import main
+    from public_transport_matcher.cli import main
     feed = Path(__file__).resolve().parents[1] / 'examples/gtfs'
     for run in ('cold', 'warm', 'cached'):
         args = ['swiss', '--workspace', str(tmp_path), '--output', str(tmp_path / run)]
