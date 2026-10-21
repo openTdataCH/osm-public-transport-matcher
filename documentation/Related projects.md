@@ -1,4 +1,4 @@
-# Related Projects and Collaboration Opportunities
+# Related projects and collaboration opportunities
 
 Research date: **2026-09-11**. This is a source-code comparison and a proposal for collaboration. No maintainers were contacted, no upstream code was copied into this project, and no cross-project accuracy benchmark was run.
 

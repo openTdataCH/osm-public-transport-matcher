@@ -212,7 +212,7 @@
           "README.md"
         ],
         "reference": [
-          "RESULT_FORMAT.md"
+          "documentation/Result bundle format.md"
         ],
         "operations": [
           "quality/README.md"

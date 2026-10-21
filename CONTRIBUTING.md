@@ -42,7 +42,7 @@ Keep acquisition, dataset profiles, integration composition, and result I/O out
 of the core layer. Static import checks enforce those boundaries; review remains
 necessary for dynamic imports and runtime effects.
 
-For a result-format or producer/consumer change, update [the wire reference](RESULT_FORMAT.md),
+For a result-format or producer/consumer change, update [the wire reference](documentation/Result%20bundle%20format.md),
 the relevant fixtures, and both sides' compatibility tests. From the sibling app
 checkout, run `make quality ENGINE_ROOT=../engine` to include independent consumer
 validation and PostGIS publication checks. The engine's own command cannot
@@ -91,6 +91,6 @@ An adapter belongs in this distribution only when it supports a broadly reusable
 
 Include the dataset namespace, source ID, OSM type/ID, observed rule, expected link and a small relevant extract. A regression should explain why an adjacent candidate is wrong. Do not include credentials, private dataset URLs or a national dump.
 
-Result schemas are versioned separately from the engine package. Changing fields consumed by the review app requires updating `RESULT_FORMAT.md`, contract fixtures and importer compatibility checks. A failed engine run or bundle validation must not replace an earlier published bundle.
+Result schemas are versioned separately from the engine package. Changing fields consumed by the review app requires updating `documentation/Result bundle format.md`, contract fixtures and importer compatibility checks. A failed engine run or bundle validation must not replace an earlier published bundle.
 
 No commit or push is required to run tests or propose a patch. Preserve the repository's AGPL-3.0-or-later license notice when extracting files.

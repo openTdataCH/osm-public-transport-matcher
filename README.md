@@ -73,7 +73,7 @@ transport-matcher swiss --source /path/to/stops_ATLAS.csv --osm /path/to/osm_dat
 
 Use `transport-matcher --help` for acquisition and GTFS refresh options. Commands take explicit paths; the in-memory API never reads files, environment variables or credentials. Output directories must be new. Result writing validates a temporary bundle before publishing it.
 
-See [the result format](RESULT_FORMAT.md) for the integration contract. The review application consumes that format without importing this package.
+See [the result bundle format](documentation/Result%20bundle%20format.md) for the integration contract. The review application consumes that format without importing this package.
 
 ## Versions, Git tags and deployment pins
 
@@ -113,7 +113,8 @@ The canonical engine documentation lives in [`documentation/`](documentation/1.%
 - [Stop matching](documentation/2.%20Matching%20process.md)
 - [Route comparison](documentation/3.%20Routes.md)
 - [Problem detection](documentation/4.%20Problems.md)
-- [Caching and performance](documentation/5.2%20Pipeline%20Performance.md)
+- [Result bundle format](documentation/Result%20bundle%20format.md)
+- [Operations and performance](documentation/5.%20Operations%20and%20performance.md)
 - [Engine tests](documentation/6.%20Pipeline%20tests.md)
 - [Changelog](documentation/Changelog.md)
 - [Related projects and collaboration opportunities](documentation/Related%20projects.md)

@@ -1,11 +1,11 @@
-# Matching Engine Changelog
+# Matching engine changelog
 
 This page records notable changes to the standalone `transport-matcher` package,
 its adapters, matching behavior, result production and command-line interface.
 Review-application releases are recorded separately in the
 [review application changelog](https://github.com/openTdataCH/stop_sync_osm_atlas/blob/main/documentation/Changelog.md).
 
-Changes to the [result bundle contract](../RESULT_FORMAT.md) are recorded in both
+Changes to the [result bundle contract](Result%20bundle%20format.md) are recorded in both
 changelogs: here from the producer side and in the application changelog from the
 consumer side.
 
@@ -16,6 +16,12 @@ consumer side.
 ### Operations
 
 - **Versioned progress contract** — The CLI now emits a self-describing public substage plan and structured lifecycle events. The catalog consolidates low-level GTFS, proximity and problem predicates into stable operational steps while retaining detailed internal timings.
+- **Accurate name-matching stage description** — The `stop_matching.name` description no longer claims name normalization; the rule compares exact names.
+
+### Documentation
+
+- **Result bundle format in the documentation tree** — The schema-1 reference moved from `RESULT_FORMAT.md` to [`documentation/Result bundle format.md`](Result%20bundle%20format.md), so the documentation portal and PDF include it; `RESULT_FORMAT.md` points to the new page.
+- **Rewritten engine chapters** — The matching, route, problem and operations pages describe current behaviour, document every dataset-profile setting, and add generated diagrams of the engine's structure, the rule order, the route model and the bundle layout.
 
 ## Version 0.1.1
 
