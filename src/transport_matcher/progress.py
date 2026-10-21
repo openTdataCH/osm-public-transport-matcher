@@ -87,7 +87,7 @@ ENGINE_PROGRESS_STAGES = (
     ),
     ProgressStage(
         "stop_matching.name", "stop_matching", "stop_matching", "Name matching",
-        "Match remaining stops using normalized names and platform references.", 40,
+        "Match remaining stops by exact name, using platform references to break ties.", 40,
     ),
     ProgressStage(
         "stop_matching.routes", "stop_matching", "stop_matching", "Route-based matching",

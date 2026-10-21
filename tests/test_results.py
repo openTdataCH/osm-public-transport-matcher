@@ -5,11 +5,13 @@ from dataclasses import replace
 import gzip
 import hashlib
 import json
+from pathlib import Path
+import re
 import threading
 
 import pytest
 
-from transport_matcher import match, SourceStop, OsmNode, write_bundle
+from transport_matcher import __version__, match, SourceStop, OsmNode, write_bundle
 from transport_matcher.results import InvalidResult, validate_bundle
 
 
@@ -171,3 +173,9 @@ def test_optional_station_reference_keeps_original_osm_tag_fields(tmp_path):
     assert row['uic_ref'] == row['tags']['uic_ref'] == 'original-uic'
     assert row['tags']['ref:local-station'] == 'X'
     assert row['key'] == 'osm:node:100'
+
+
+def test_package_version_matches_project_metadata():
+    # Source checkouts write __version__ into manifests; it must follow pyproject.toml.
+    pyproject = (Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text(encoding='utf-8')
+    assert re.search(r'(?m)^version = "([^"]+)"', pyproject).group(1) == __version__
