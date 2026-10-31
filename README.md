@@ -2,7 +2,7 @@
 
 A Python producer package for matching public transport stops and routes against OpenStreetMap. It contains a source-neutral matching core, curated format adapters, optional acquisition clients and maintained first-party integrations. It returns complete results: matches and their evidence, unmatched entities, stop groups, discrepancies and diagnostics. It runs independently of the review website, Flask, PostGIS and any database service. Swiss GTFS preprocessing uses an embedded DuckDB database for temporary local work.
 
-The Swiss ATLAS workflow and generic GTFS workflow use the same stop predicates. Dataset profiles define identifier mappings, grouping policies and thresholds. The project is licensed under AGPL-3.0-or-later.
+The Swiss ATLAS workflow and generic GTFS workflow use the same stop predicates. Dataset profiles define identifier mappings, grouping policies and thresholds. The project is licensed under the [MIT License](LICENSE).
 
 ```mermaid
 flowchart LR

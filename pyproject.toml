@@ -8,7 +8,7 @@ version = "0.2.0"
 description = "Independent public transport stop and route matching against OpenStreetMap"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "AGPL-3.0-or-later"}
+license = {text = "MIT"}
 dependencies = ["numpy>=1.24", "scipy>=1.10"]
 
 [project.optional-dependencies]
