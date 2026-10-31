@@ -11,6 +11,21 @@ consumer side.
 
 ---
 
+## Unreleased
+
+### Matching
+
+- **Disused OSM elements** — An element with a lifecycle-prefixed stop tag (`disused:`, `abandoned:`, `removed:`, `demolished:`, `razed:`, `destroyed:` or `was:`) is set aside before matching and returned in `MatchingOutput.disused_osm`. Elements that kept an unprefixed stop tag were matched like active stops; they no longer are, so a source stop whose only candidate was one becomes unmatched. See [E2](2.%20Matching%20process.md#rules-shared-by-all-matching-rules).
+- **`disused` problem** — P1 when an unmatched source stop shares the element's station reference, P2 when an unprefixed stop tag remains or a route relation still lists the element, none for a cleanly retired element. Disused elements get no `unmatched` problem. See [E4.1](4.1%20Stop%20Problems.md#disused-problems).
+
+### Inputs
+
+- **Fully retired stops downloaded** — The Overpass query also selects elements whose every stop tag is lifecycle-prefixed, and seeds their route relations. `core/osm_tags.py` defines the stop selectors and lifecycle prefixes for both the query and the parser; the existing selector lines are unchanged. See [E1.3](1.3%20OSM%20data.md#disused-stops).
+
+### Results and operations
+
+- **Disused elements in the bundle, schema 1** — `osm_nodes` rows carry `lifecycle`, OSM `unmatched` rows a `disused` flag, disused elements are `single` stop units, and `metadata.summary.disused_osm` counts them. A missing `disused` counts as false, so earlier bundles stay valid. A consumer that predates the flag rejects a bundle with disused elements, because they have no `unmatched` problem; upgrade the consumer first. See [Result bundle format](Result%20bundle%20format.md#matches-and-unmatched-entities).
+
 ## Version 0.2.0
 
 First public release. Versions 0.1.x were internal pre-releases.

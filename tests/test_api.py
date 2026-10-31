@@ -294,3 +294,29 @@ def test_group_proximity_retains_station_reference_evidence_from_osm_sibling():
     assert [(row.osm_node.node_id, row.match_type) for row in result.matched] == [
         ('1', 'distance_matching_1_uic_ref'), ('2', 'osm_group_propagation'),
     ]
+
+
+def test_disused_elements_never_match_and_are_flagged_only_when_they_need_attention():
+    retired = {'disused:highway': 'bus_stop', 'disused:public_transport': 'platform'}
+    osm = [
+        # Retired, but ATLAS still lists the station with a stop that has no OSM partner.
+        OsmNode('1', 47., 8., tags={**retired, 'uic_ref': '850001'}),
+        # Half retired: public_transport=platform still makes it a stop for data users.
+        OsmNode('2', 47.1, 8.1, tags={'disused:highway': 'bus_stop', 'public_transport': 'platform'}),
+        # Cleanly retired, but a route relation still lists it.
+        OsmNode('3', 47.2, 8.2, tags=retired),
+        # Cleanly retired and referenced by nothing: shown, never a problem.
+        OsmNode('4', 47.3, 8.3, tags={'abandoned:railway': 'halt'}),
+    ]
+    output = match([swiss_stop('a', 8., 'A')], osm, SWITZERLAND,
+                   route_evidence={'osm': {'3': [{'gtfs_route_id': 'r', 'direction_id': '0'}]}})
+    assert output.matched == [] and output.unmatched_osm == []
+    assert [(node.node_id, node.lifecycle) for node in output.disused_osm] == [
+        ('1', 'disused'), ('2', 'disused'), ('3', 'disused'), ('4', 'abandoned'),
+    ]
+    disused = {(p.osm_ids, p.priority): p for p in output.problems if p.problem_type == 'disused'}
+    assert set(disused) == {(('1',), 1), (('2',), 2), (('3',), 2)}
+    assert disused[(('1',), 1)].evidence['conflicting_source_keys'] == ['atlas:a']
+    # The ATLAS stop lost its only candidate, so it is unmatched in its own right.
+    assert [p.source_keys for p in output.problems if p.problem_type == 'unmatched'] == [('atlas:a',)]
+    assert output.metadata['summary']['disused_osm'] == 4

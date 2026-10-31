@@ -7,6 +7,11 @@ import time
 from typing import Any
 
 from public_transport_matcher import __version__
+from public_transport_matcher.core.osm_tags import (
+    LIFECYCLE_KEY_PATTERN,
+    LIFECYCLE_VALUE_PATTERN,
+    STOP_TAG_SELECTORS,
+)
 
 
 OVERPASS_URL = os.getenv("OVERPASS_API_URL", "https://overpass-api.de/api/interpreter")
@@ -28,19 +33,17 @@ def build_public_transport_query(country_code: str = "CH") -> str:
     """Return the Overpass QL query for an ISO 3166-1 alpha-2 area."""
     if not country_code.isalpha() or len(country_code) != 2:
         raise ValueError("country_code must be a two-letter ISO code")
+    stop_selectors = "\n".join(
+        f'            node(area.searchArea)["{key}"{operator}"{value}"];'
+        for key, operator, value in STOP_TAG_SELECTORS
+    )
     return f'''
         [out:xml][timeout:360];
         area["ISO3166-1"="{country_code.upper()}"]->.searchArea;
 
         (
-            node(area.searchArea)["public_transport"~"platform|stop_position|station|halt|stop"];
-            node(area.searchArea)["railway"="tram_stop"];
-            node(area.searchArea)["amenity"="ferry_terminal"];
-            node(area.searchArea)["amenity"="bus_station"];
-            node(area.searchArea)["highway"="bus_stop"];
-            node(area.searchArea)["railway"="halt"];
-            node(area.searchArea)["railway"="station"];
-            node(area.searchArea)["aerialway"="station"];
+{stop_selectors}
+            node(area.searchArea)[~"{LIFECYCLE_KEY_PATTERN}"~"{LIFECYCLE_VALUE_PATTERN}"];
         )->.pt_nodes;
 
         (

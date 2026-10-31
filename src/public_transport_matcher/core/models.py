@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 import math
 from typing import Any
 
+from public_transport_matcher.core.osm_tags import lifecycle_of
+
 
 def _validate_position(lat: float, lon: float) -> None:
     if not math.isfinite(lat) or not math.isfinite(lon) or not (-90 <= lat <= 90 and -180 <= lon <= 180):
@@ -68,11 +70,15 @@ class OsmNode:
     tags: dict[str, str] = field(default_factory=dict)
     element_type: str = 'node'
     station_reference: str | None = None
+    # Lifecycle prefix of a retired stop tag, such as 'disused'; derived from tags.
+    lifecycle: str | None = None
 
     def __post_init__(self):
         if not self.node_id:
             raise ValueError('OSM elements require an identity')
         _validate_position(self.lat, self.lon)
+        if self.lifecycle is None:
+            object.__setattr__(self, 'lifecycle', lifecycle_of(self.tags))
         if self.element_type not in ('node', 'way', 'relation'):
             raise ValueError('Unsupported OSM element type')
         if self.node_id.startswith('way_'):
@@ -171,6 +177,8 @@ class MatchingOutput:
     unmatched_osm: list[OsmNode]
     duplicate_key_map: dict[str, list[str]]
     osm_stop_units: list[OsmStopUnitRecord] = field(default_factory=list)
+    # Elements with a lifecycle-prefixed stop tag: never matched, reported apart.
+    disused_osm: list[OsmNode] = field(default_factory=list)
     all_source_nodes: list[SourceStop] = field(default_factory=list)
     all_osm_nodes: list[OsmNode] = field(default_factory=list)
     source_route_evidence_by_key: dict[str, dict[str, list[Any]]] = field(default_factory=dict)

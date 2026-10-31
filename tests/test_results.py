@@ -179,3 +179,26 @@ def test_package_version_matches_project_metadata():
     # Source checkouts write __version__ into manifests; it must follow pyproject.toml.
     pyproject = (Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text(encoding='utf-8')
     assert re.search(r'(?m)^version = "([^"]+)"', pyproject).group(1) == __version__
+
+
+def test_disused_elements_roundtrip_as_flagged_unmatched_singles(tmp_path):
+    from public_transport_matcher.results.validation import validate_records
+
+    result = match([], [OsmNode('100', 52., 13., tags={'disused:highway': 'bus_stop', 'public_transport': 'platform'}),
+                        OsmNode('101', 52.1, 13.1, name='Active')])
+    path = write_bundle(result, tmp_path / 'run')
+    validate_bundle(path)
+    _, rows = read_sections(path)
+    assert {row['key']: row['lifecycle'] for row in rows['osm_nodes']} == {'osm:node:100': 'disused', 'osm:node:101': None}
+    assert {row['key']: row['disused'] for row in rows['unmatched']} == {'osm:node:100': True, 'osm:node:101': False}
+    assert {row['representative_node_id']: row['stop_kind'] for row in rows['groups']} == {'100': 'single', '101': 'single'}
+    assert {(row['problem_type'], tuple(row['osm_ids'])) for row in rows['problems']} == {('disused', ('100',)), ('unmatched', ('101',))}
+
+    flag_lost = deepcopy(rows)
+    next(row for row in flag_lost['unmatched'] if row['key'] == 'osm:node:100')['disused'] = False
+    with pytest.raises(InvalidResult, match='Disused status disagrees'):
+        validate_records(flag_lost)
+    wrong_target = deepcopy(rows)
+    next(row for row in wrong_target['problems'] if row['problem_type'] == 'disused')['osm_ids'] = ['101']
+    with pytest.raises(InvalidResult, match='Disused problem references an active element'):
+        validate_records(wrong_target)

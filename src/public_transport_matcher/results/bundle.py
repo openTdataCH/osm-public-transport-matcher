@@ -54,6 +54,9 @@ def _sections(result):
         osm[_osm_key(match.osm_node)] = match.osm_node
     for node in result.unmatched_osm:
         osm[_osm_key(node)] = node
+    disused = list(getattr(result, "disused_osm", []))
+    for node in disused:
+        osm[_osm_key(node)] = node
 
     def source_rows():
         for key, node in sorted(sources.items()):
@@ -86,7 +89,12 @@ def _sections(result):
                 "side": "osm", "key": _osm_key(node),
                 "isolated": str(node.node_id) in isolated_osm,
                 "effectively_matched": str(node.node_id) in effective,
+                "disused": False,
             }
+        # Disused elements were never candidates; they are not "isolated".
+        for node in disused:
+            yield {"side": "osm", "key": _osm_key(node), "isolated": False,
+                   "effectively_matched": False, "disused": True}
 
     def group_rows():
         seen = set()
@@ -98,6 +106,9 @@ def _sections(result):
             yield {"side": "source", "key": identity[0], "members": list(identity), "kind": "duplicate"}
         for unit in result.osm_stop_units:
             yield {"side": "osm", **_json_value(unit)}
+        for node in disused:
+            yield {"side": "osm", "stop_kind": "single", "group_kind": None, "representative_node_id": node.node_id,
+                   "members": [{"node_id": node.node_id, "member_role": "single"}]}
 
     extensions = dict(getattr(result, "extensions", {}) or {})
     extensions["duplicate_osm_group_map"] = result.duplicate_osm_group_map

@@ -124,6 +124,9 @@ def _build_base_lookups(base_data: MatchingOutput | None, known_source_keys: set
         register_osm_node(osm_node)
     for osm_node in getattr(base_data, 'all_osm_nodes', []):
         register_osm_node(osm_node)
+    # Route relations can still list stops that OSM marks as disused.
+    for osm_node in getattr(base_data, 'disused_osm', []):
+        register_osm_node(osm_node)
 
     unique_source_key_by_station_ref = {
         station_ref: next(iter(keys))

@@ -15,6 +15,7 @@ from .core.predicates.distance_matching import GroupProximityPredicate, LocalRef
 from .core.predicates.route_matching_gtfs import RouteMatchPredicate
 from .core.problem_detection.context import ProblemContext
 from .core.problem_detection.pipeline import STOP_PROBLEM_PIPELINE
+from .core.problem_detection.stop_predicates.disused import conflicting_source_stops, disused_problem
 from .core.utils.common import haversine_distance
 from .core.profile import MatchingProfile
 from .progress import progress_stage
@@ -157,6 +158,11 @@ def _detect(output, profile, route_state):
             for result in predicate(ctx, node):
                 p = _problem(result, osm_ids=[node.node_id], evidence={'nearest_source_distance_m': nearest})
                 problems[p.problem_id] = p
+    for node in output.disused_osm:
+        for result in disused_problem(ctx, node):
+            conflicts = sorted(stop.key for stop in conflicting_source_stops(ctx, node))
+            p = _problem(result, osm_ids=[node.node_id], evidence={'lifecycle': node.lifecycle, 'conflicting_source_keys': conflicts})
+            problems[p.problem_id] = p
     output.problems = sorted(problems.values(), key=lambda p: (p.priority, p.problem_type, p.problem_id))
 
 
@@ -176,12 +182,17 @@ def match(source, osm, profile=None, route_evidence=None):
     else:
         source = SourceState(source, route_evidence_by_key=route_evidence.get('source'))
     if isinstance(osm, OsmState):
-        osm = OsmState.from_records(osm.get_all_nodes(), node_routes=route_evidence.get('osm', osm._node_routes),
-                                    name_dirs=osm.name_dirs, uic_dirs=osm.uic_dirs, station_ref_tag=profile.osm_station_ref_tag,
-                                    preserve_name_alias_multiplicity=profile.preserve_name_alias_multiplicity)
+        nodes, node_routes, name_dirs, uic_dirs = (osm.get_all_nodes(), route_evidence.get('osm', osm._node_routes),
+                                                   osm.name_dirs, osm.uic_dirs)
     else:
-        osm = OsmState.from_records(osm, node_routes=route_evidence.get('osm'), station_ref_tag=profile.osm_station_ref_tag,
-                                    preserve_name_alias_multiplicity=profile.preserve_name_alias_multiplicity)
+        nodes, node_routes, name_dirs, uic_dirs = list(osm), route_evidence.get('osm'), None, None
+    # A lifecycle-prefixed stop tag (disused:highway=bus_stop) says the element
+    # is out of service: it never takes part in matching and is reported apart.
+    disused_osm = OsmState.from_records([node for node in nodes if node.lifecycle],
+                                        station_ref_tag=profile.osm_station_ref_tag).get_all_nodes()
+    osm = OsmState.from_records([node for node in nodes if not node.lifecycle], node_routes=node_routes,
+                                name_dirs=name_dirs, uic_dirs=uic_dirs, station_ref_tag=profile.osm_station_ref_tag,
+                                preserve_name_alias_multiplicity=profile.preserve_name_alias_multiplicity)
     route_state = route_evidence.get('route_state') or RouteState()
     with progress_stage('stop_matching.groups'):
         _build_groups(source, osm, profile)
@@ -191,7 +202,8 @@ def match(source, osm, profile=None, route_evidence=None):
     output = MatchingOutput(
         matched=result.matched, unmatched_source=result.unmatched_source,
         unmatched_osm=result.unmatched_osm, duplicate_key_map=source.duplicate_key_map,
-        osm_stop_units=_stop_units(osm), all_source_nodes=list(source.get_all_rows_as_dict().values()),
+        osm_stop_units=_stop_units(osm), disused_osm=disused_osm,
+        all_source_nodes=list(source.get_all_rows_as_dict().values()),
         all_osm_nodes=osm.get_all_nodes(), source_route_evidence_by_key=source._route_evidence_by_key,
         osm_node_routes=osm._node_routes, osm_name_dirs=osm.name_dirs, profile_id=profile.profile_id,
         diagnostics=list(ctx.diagnostics),
@@ -208,6 +220,7 @@ def match(source, osm, profile=None, route_evidence=None):
         'capabilities': [cap for cap in profile.capabilities if cap != 'routes' or (has_source_routes and has_osm_routes)],
         'summary': {'source_stops': len(output.all_source_nodes), 'osm_elements': len(output.all_osm_nodes),
                     'matches': len(output.matched), 'unmatched_source': len(output.unmatched_source),
-                    'unmatched_osm': len(output.unmatched_osm), 'problems': len(output.problems)},
+                    'unmatched_osm': len(output.unmatched_osm), 'disused_osm': len(output.disused_osm),
+                    'problems': len(output.problems)},
     }
     return output

@@ -249,3 +249,22 @@ def test_osm_evidence_only_indexes_exported_elements_and_reports_external_stops(
     repeated = unresolved_osm_member_diagnostics(products)[0]
     assert repeated['count'] == 12
     assert len(repeated['examples']) == 10
+
+
+def test_osm_adapter_marks_lifecycle_prefixed_stops_as_disused(tmp_path):
+    path = tmp_path / 'osm.xml'
+    path.write_text('''<osm>
+      <node id="1" lat="48" lon="2"><tag k="disused:highway" v="bus_stop"/><tag k="public_transport" v="platform"/></node>
+      <node id="2" lat="48" lon="2.1"><tag k="highway" v="bus_stop"/></node>
+    </osm>''')
+    nodes = {node.node_id: node for node in read_osm(path).get_all_nodes()}
+    assert (nodes['1'].lifecycle, nodes['2'].lifecycle) == ('disused', None)
+
+
+def test_disused_node_does_not_hide_an_active_station_way(tmp_path):
+    path = tmp_path / 'osm.xml'
+    path.write_text('''<osm>
+      <node id="1" lat="48" lon="2"><tag k="disused:railway" v="halt"/><tag k="uic_ref" v="850001"/></node>
+      <way id="5"><center lat="48" lon="2.001"/><tag k="railway" v="station"/><tag k="uic_ref" v="850001"/></way>
+    </osm>''')
+    assert {node.key for node in read_osm(path).get_all_nodes()} == {'osm:node:1', 'osm:way:5'}

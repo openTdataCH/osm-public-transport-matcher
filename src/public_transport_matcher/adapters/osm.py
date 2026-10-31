@@ -5,6 +5,7 @@ import xml.etree.ElementTree as ET
 from collections import defaultdict
 from pathlib import Path
 from public_transport_matcher.core.models import OsmNode
+from public_transport_matcher.core.osm_tags import lifecycle_of
 from public_transport_matcher.core.state import OsmState
 
 logger = logging.getLogger(__name__)
@@ -64,7 +65,9 @@ def read_osm(xml_file: str | Path, *, route_namespace: str | None = None, route_
         if "uic_ref" in tags:
             uic_ref_dict[tags["uic_ref"]].append(entry)
             element_id_to_uic[node_id] = tags["uic_ref"]
-            node_uic_refs.add(tags["uic_ref"])
+            # A disused node must not hide an active stop way with the same uic_ref.
+            if not lifecycle_of(tags):
+                node_uic_refs.add(tags["uic_ref"])
 
         if "name" in tags:
             element_id_to_name[node_id] = tags["name"]

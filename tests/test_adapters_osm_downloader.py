@@ -218,3 +218,21 @@ def test_process_osm_routes_data_deduplicates_duplicate_route_master_relation_me
                 "member_sequence": "0",
                 "member_role": "forward",
         }]
+
+
+def test_overpass_query_and_parser_share_the_lifecycle_definition():
+    import re
+    from public_transport_matcher.acquisition.overpass import build_public_transport_query
+    from public_transport_matcher.core.osm_tags import LIFECYCLE_KEY_PATTERN, has_active_stop_tag, lifecycle_of
+
+    query = build_public_transport_query()
+    assert '["public_transport"~"platform|stop_position|station|halt|stop"]' in query
+    assert f'[~"{LIFECYCLE_KEY_PATTERN}"~"' in query
+    assert re.match(LIFECYCLE_KEY_PATTERN, 'disused:highway') and not re.match(LIFECYCLE_KEY_PATTERN, 'construction:highway')
+
+    assert lifecycle_of({'disused:highway': 'bus_stop'}) == 'disused'
+    assert lifecycle_of({'was:railway': 'halt', 'abandoned:railway': 'halt'}) == 'abandoned'
+    assert lifecycle_of({'disused:shop': 'bakery', 'disused:highway': 'crossing'}) is None
+    assert lifecycle_of({'construction:highway': 'bus_stop', 'highway': 'bus_stop'}) is None
+    assert has_active_stop_tag({'disused:highway': 'bus_stop', 'public_transport': 'platform'})
+    assert not has_active_stop_tag({'disused:highway': 'bus_stop', 'disused:public_transport': 'platform'})

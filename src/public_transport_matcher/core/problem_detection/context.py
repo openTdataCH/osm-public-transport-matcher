@@ -76,6 +76,8 @@ class ProblemContext:
     source_count_by_uic: dict = field(default_factory=dict)
     osm_count_by_uic: dict = field(default_factory=dict)
     osm_platform_count_by_uic: dict = field(default_factory=dict)
+    # Unmatched source stops per station reference (for disused elements)
+    unmatched_source_by_station_ref: dict[str, list] = field(default_factory=dict)
 
     # Route evidence lookups for matched-pair diagnostics
     source_route_evidence_by_key: dict[str, dict[str, list]] = field(default_factory=dict)
@@ -176,6 +178,7 @@ class ProblemContext:
             if node.station_ref:
                 key = str(node.station_ref)
                 self.source_count_by_uic[key] = self.source_count_by_uic.get(key, 0) + 1
+                self.unmatched_source_by_station_ref.setdefault(key, []).append(node)
 
         # OSM UIC counts (+ platform sub-count)
         for rec in matched:

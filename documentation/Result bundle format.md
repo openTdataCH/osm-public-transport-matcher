@@ -24,9 +24,9 @@ Every section is a UTF-8 JSON Lines file compressed with gzip, named `<section>.
 | Section | One row per | Principal fields |
 |---|---|---|
 | `source_stops` | source stop | `key`, `namespace`, `source_id`, `lat`, `lon`, `name`, `platform_code`, `station_ref`, `operator`, `operator_id`, `operator_name`, `references`, `parent_id`, `stop_kind`, `extensions` |
-| `osm_nodes` | positioned OSM element | `key`, `node_id`, `element_type`, `lat`, `lon`, `tags`, the projected tags `name`, `local_ref`, `uic_ref`, `uic_name`, `public_transport`, `railway`, `amenity`, `aerialway`, `network`, `operator`, and optionally `station_reference` |
+| `osm_nodes` | positioned OSM element | `key`, `node_id`, `element_type`, `lat`, `lon`, `tags`, the projected tags `name`, `local_ref`, `uic_ref`, `uic_name`, `public_transport`, `railway`, `amenity`, `aerialway`, `network`, `operator`, `lifecycle`, and optionally `station_reference` |
 | `matches` | link between a source stop and an OSM element | `source_key`, `osm_key`, `method`, `distance_m`, `notes`, `evidence`, `problems` |
-| `unmatched` | entity without any match | `side` (`source` or `osm`), `key`, `isolated`; OSM rows also `effectively_matched` |
+| `unmatched` | entity without any match | `side` (`source` or `osm`), `key`, `isolated`; OSM rows also `effectively_matched` and `disused` |
 | `groups` | source duplicate group or OSM stop unit | see [Groups](#groups) |
 | `problems` | detected problem | `problem_id`, `problem_type`, `priority` (1–3), `source_keys`, `osm_ids`, `evidence` |
 | `routes` | named route collection | `kind`, `value`; see [Routes](#routes) |
@@ -79,18 +79,19 @@ Rows refer to entities by key, never by position.
 - Every entity appears either in `matches` or in `unmatched`, never in both and never in neither.
 - `isolated` is true when no element of the other side lies within the profile's isolation radius.
 - `effectively_matched` marks the middle of an OSM trio whose two sides are matched. It does not create a match for the middle.
+- `disused` marks a [disused OSM element](1.3%20OSM%20data.md#disused-stops): one whose `osm_nodes` row has a `lifecycle`, the prefix of a retired stop tag such as `disused`. `lifecycle` is null for active elements. The disused rows are exactly the rows with a `lifecycle`, so such an element is never matched or effectively matched; the producer writes it with `isolated: false`. A missing `disused` counts as false, so earlier schema 1 bundles stay valid.
 
 ## Groups
 
 A **source duplicate group** has `side: "source"`, `kind: "duplicate"`, its representative `key`, and `members`: at least two distinct source keys of the same namespace. Groups never overlap.
 
-An **OSM stop unit** has `side: "osm"`, `stop_kind` (`single`, `pair` or `trio`), `group_kind` (the grouping branch, for example `osm_pair_uic`), `representative_node_id` and `members` of `{node_id, member_role}`. The roles are `single`; `pair_a` and `pair_b`; or `trio_middle` and two `trio_side`. Every OSM element belongs to exactly one stop unit.
+An **OSM stop unit** has `side: "osm"`, `stop_kind` (`single`, `pair` or `trio`), `group_kind` (the grouping branch, for example `osm_pair_uic`), `representative_node_id` and `members` of `{node_id, member_role}`. The roles are `single`; `pair_a` and `pair_b`; or `trio_middle` and two `trio_side`. Every OSM element belongs to exactly one stop unit; a disused element is always a `single` unit.
 
 ## Problems
 
 Each problem has a stable `problem_id`, derived from its type and the sorted keys of the entities it affects; its `evidence` can change between runs without changing that identity. A future review workflow can compare evidence to decide whether an earlier review still applies.
 
-Each match row repeats the problems of that pair (type, priority and duplicate flags) in its `problems` field; the same problems appear in the `problems` section with their keys and evidence. Every unmatched source stop, and every unmatched OSM element that is not effectively matched, has an `unmatched` problem.
+Each match row repeats the problems of that pair (type, priority and duplicate flags) in its `problems` field; the same problems appear in the `problems` section with their keys and evidence. Every unmatched source stop, and every unmatched OSM element that is neither effectively matched nor disused, has an `unmatched` problem; the other OSM elements have none. A `disused` problem lists only disused elements in `osm_ids` and no `source_keys`; its evidence holds `lifecycle` and `conflicting_source_keys` ([E4.1](4.1%20Stop%20Problems.md#disused-problems)).
 
 ## Routes
 
