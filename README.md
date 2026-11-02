@@ -94,7 +94,7 @@ Release checklist:
 2. Run the full engine suite and the producer-to-consumer contract test.
 3. Commit the release, then create an annotated `v<package-version>` tag on that exact commit.
 4. Push the commit and tag. Never force-move an existing release tag.
-5. In each consumer deployment, resolve the tag once and store its full commit SHA as `ENGINE_REF`; rebuild the scheduler and documentation images.
+5. Pin the tag's full commit SHA in each consumer (the review app's `engine.ref`) and rebuild its scheduler and documentation images.
 
 ```bash
 git tag -a v0.2.0 -m "OSM Public Transport Matcher 0.2.0"
