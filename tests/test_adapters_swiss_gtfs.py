@@ -69,3 +69,21 @@ def test_select_swiss_gtfs_stops_fails_clearly_when_no_swiss_identifiers(monkeyp
                 'stop_lon': 7.5896,
             }
         ]))
+
+
+def test_swiss_boundary_selector_requires_identifier_columns_and_some_stops(tmp_path):
+    import json
+    from public_transport_matcher.swiss import _boundary_selector
+
+    boundary = tmp_path / 'boundary.geojson'
+    boundary.write_text(json.dumps({'type': 'Polygon', 'coordinates': [[[5, 45], [11, 45], [11, 48], [5, 48], [5, 45]]]}))
+    select = _boundary_selector(boundary)
+    # Loaders add an absent optional column as an empty one.
+    stops = pd.DataFrame([{'stop_id': '8500010:0:1', 'original_stop_id': pd.NA, 'didok': '8500010',
+                           'stop_lat': 47.5, 'stop_lon': 7.6}])
+
+    with pytest.raises(RuntimeError, match=r"lacks required columns for Swiss stop filtering: \['original_stop_id'\]"):
+        select(stops)
+    with pytest.raises(RuntimeError, match='GTFS Swiss stop filter produced 0 stops'):
+        select(stops.assign(original_stop_id='ch:1:sloid:10', stop_lat=40.0))
+    assert select(stops.assign(original_stop_id='ch:1:sloid:10'))['stop_id'].tolist() == ['8500010:0:1']

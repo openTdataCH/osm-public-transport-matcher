@@ -1,6 +1,8 @@
 from pathlib import Path
 import csv
 
+import pytest
+
 
 class DummyResponse:
     def __init__(self, status_code=200, text="<osm></osm>", url="https://overpass-api.de/api/interpreter"):
@@ -58,8 +60,7 @@ def test_query_overpass_raises_on_http_error(monkeypatch, tmp_path):
     else:
         raise AssertionError("Expected RuntimeError for Overpass HTTP failure")
 
-    assert "Overpass request failed (406)" in message
-    assert "Not Acceptable" in message
+    assert message == "Overpass request failed: https://overpass-api.de/api/interpreter: HTTP 406 (1 attempt)"
 
 
 def test_query_overpass_retries_504_then_succeeds(monkeypatch, tmp_path):
@@ -116,8 +117,86 @@ def test_query_overpass_exhausts_retries_for_502(monkeypatch, tmp_path):
 
     assert session.calls == 3
     assert sleeps == [0.5, 1.0]
-    assert "Overpass request failed (502)" in message
-    assert "Bad Gateway" in message
+    assert message.endswith(": HTTP 502 (3 attempts)")
+
+
+def test_query_overpass_retries_rate_limits_and_timeouts(monkeypatch, tmp_path):
+    import requests
+    monkeypatch.chdir(tmp_path)
+    from public_transport_matcher.acquisition import overpass
+    sleeps = []
+    monkeypatch.setattr(overpass.time, "sleep", sleeps.append)
+    answers = [DummyResponse(status_code=429, text="Too Many Requests"), requests.ReadTimeout("slow"),
+               DummyResponse(text="<osm version='0.6'></osm>")]
+
+    class DummySession:
+        def post(self, url, **kwargs):
+            answer = answers.pop(0)
+            if isinstance(answer, Exception):
+                raise answer
+            return answer
+
+    result = overpass.query_overpass(session=DummySession(), max_retries=2, retry_backoff_seconds=1)
+
+    assert result == "<osm version='0.6'></osm>"
+    assert sleeps == [1, 2]
+
+
+def test_query_overpass_rejects_runtime_errors_and_moves_to_the_next_endpoint(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    from public_transport_matcher.acquisition import overpass
+    sleeps = []
+    monkeypatch.setattr(overpass.time, "sleep", sleeps.append)
+    first, second, third = (f"https://{name}.example/api/interpreter" for name in ("first", "second", "third"))
+    timed_out = ("<osm version='0.6'><node id='1' lat='47' lon='8'/>"
+                 "<remark> runtime error: Query timed out in \"query\" at line 3 after 361 seconds. </remark></osm>")
+    calls = []
+
+    class DummySession:
+        def post(self, url, **kwargs):
+            calls.append(url)
+            if url == first:
+                return DummyResponse(text=timed_out, url=url)
+            if url == second:
+                return DummyResponse(status_code=403, text="<html><p>Forbidden</p></html>", url=url)
+            return DummyResponse(text="<osm version='0.6'></osm>", url=url)
+
+    with pytest.raises(RuntimeError) as failure:
+        overpass.query_overpass(session=DummySession(), max_retries=1, retry_backoff_seconds=1,
+                                overpass_url=f"{first}, {second}")
+
+    assert calls == [first, first, second]
+    assert sleeps == [1]
+    assert str(failure.value) == (
+        f"Overpass request failed: {first}: runtime error: Query timed out in \"query\" at line 3 "
+        f"after 361 seconds. (2 attempts); {second}: HTTP 403 (1 attempt)"
+    )
+    assert not Path("data/raw/osm_data.xml").exists()
+
+    calls.clear()
+    assert overpass.query_overpass(session=DummySession(), overpass_url=f"{second},{third}") == "<osm version='0.6'></osm>"
+    assert calls == [second, third]
+
+
+@pytest.mark.parametrize("text, message", [
+    ("<osm version='0.6'><node id='1'", "invalid XML"),
+    ("", "invalid XML"),
+    ("<html><body>Server busy</body></html>", "not an OSM document"),
+])
+def test_check_osm_snapshot_rejects_incomplete_answers(text, message):
+    from public_transport_matcher.acquisition.overpass import OverpassError, check_osm_snapshot
+
+    with pytest.raises(OverpassError, match=message):
+        check_osm_snapshot(text)
+
+
+def test_osm_base_time_reads_the_snapshot_header():
+    from public_transport_matcher.acquisition.overpass import osm_base_time
+
+    header = ('<?xml version="1.0" encoding="UTF-8"?>\n<osm version="0.6">\n<note>ODbL</note>\n'
+              '<meta osm_base="2026-10-31T19:03:06Z" areas="2026-10-31T14:54:51Z"/>\n</osm>')
+    assert osm_base_time(header) == "2026-10-31T19:03:06Z"
+    assert osm_base_time("<osm/>") is None
 
 
 def test_process_osm_routes_data_writes_route_master_and_relation_csvs(monkeypatch, tmp_path):

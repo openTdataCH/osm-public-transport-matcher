@@ -117,7 +117,6 @@ The canonical engine documentation lives in [`documentation/`](documentation/1.%
 - [Operations and performance](documentation/5.%20Operations%20and%20performance.md)
 - [Engine tests](documentation/6.%20Pipeline%20tests.md)
 - [Changelog](documentation/Changelog.md)
-- [Related projects and collaboration opportunities](documentation/Related%20projects.md)
 
 The review application may render these pages in its combined documentation portal, but changes to engine behavior and its documentation belong together in this package.
 

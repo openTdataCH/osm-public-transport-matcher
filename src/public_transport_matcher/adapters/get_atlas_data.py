@@ -18,6 +18,12 @@ ATLAS_ACTUAL_DATE_RESOURCE_PERMALINK = (
     "https://data.opentransportdata.swiss/dataset/traffic-point-v2/"
     "resource_permalink/actual-date-world-traffic-point.csv"
 )
+ATLAS_REQUIRED_COLUMNS = ('sloid', 'uicCountryCode', 'wgs84North', 'wgs84East', 'validTo')
+# Read as empty values when absent, which weakens matching without failing it.
+ATLAS_EXPECTED_COLUMNS = (
+    'designationOfficial', 'designation', 'number', 'servicePointBusinessOrganisation',
+    'servicePointBusinessOrganisationAbbreviationEn', 'servicePointBusinessOrganisationDescriptionEn',
+)
 
 
 def _ensure_parent_dir(path: str) -> None:
@@ -512,6 +518,13 @@ def get_atlas_stops(output_path, download_url, *, boundary_geojson=None):
     response.raise_for_status()
 
     df = _load_atlas_dataframe(response)
+    missing = [column for column in ATLAS_REQUIRED_COLUMNS if column not in df.columns]
+    if missing:
+        raise ValueError(f"ATLAS CSV lacks required columns: {missing}")
+    warnings = []
+    absent = [column for column in ATLAS_EXPECTED_COLUMNS if column not in df.columns]
+    if absent:
+        warnings.append(f"ATLAS CSV lacks columns {absent}; their values are empty")
 
     # ── Step 1: Country filter (uicCountryCode == 85) ──────────────
     raw_total = len(df)
@@ -550,7 +563,10 @@ def get_atlas_stops(output_path, download_url, *, boundary_geojson=None):
             f"(from {after_validity:,})"
         )
     else:
-        print("ATLAS: 'trafficPointElementType' column not found, cannot filter for BOARDING_PLATFORM.")
+        warnings.append("ATLAS CSV lacks trafficPointElementType; all traffic point types were kept, "
+                        "not only boarding platforms")
+    for warning in warnings:
+        print(f"ATLAS warning: {warning}")
 
     after_type = len(df)
 
@@ -581,6 +597,7 @@ def get_atlas_stops(output_path, download_url, *, boundary_geojson=None):
         "type_counts": type_counts,
         "boarding_platform_pct": _pct(boarding_platform_count, raw_total),
         "boarding_area_pct": _pct(boarding_area_count, raw_total),
+        "warnings": warnings,
     }
 
 

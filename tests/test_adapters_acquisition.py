@@ -35,8 +35,9 @@ def sources(tmp_path, monkeypatch):
 
     def osm(**kw):
         calls['osm'] += 1
-        Path(kw['output_path']).write_text('<osm/>')
-        return '<osm/>'
+        snapshot = '<osm><meta osm_base="2026-11-01T08:00:00Z"/></osm>'
+        Path(kw['output_path']).write_text(snapshot)
+        return snapshot
     monkeypatch.setattr(acquisition, 'query_overpass', osm)
     return calls, versions
 
@@ -48,7 +49,9 @@ def refresh(path, **kwargs):
 
 def test_refresh_reuses_verified_layers_and_always_refreshes_osm(tmp_path, sources, capsys):
     calls, versions = sources
-    assert refresh(tmp_path)['preprocessing_reused'] is False
+    first = refresh(tmp_path)
+    assert first['preprocessing_reused'] is False
+    assert first['osm_data_at'] == '2026-11-01T08:00:00Z'
     cold = public_events(capsys.readouterr().out)
     assert not any(e['event'] == 'stage_outcome' for e in cold)
     assert refresh(tmp_path)['preprocessing_reused'] is True

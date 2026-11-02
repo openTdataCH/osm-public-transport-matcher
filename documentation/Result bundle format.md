@@ -63,6 +63,8 @@ No Python pickle, ORM object, credential or path needed for reading crosses the 
 
 The example shows one entry of `files`; a real manifest has all nine. `bytes` and `sha256` describe the compressed file, `rows` the number of decoded objects. `metadata` carries the run's provenance: the [capabilities](#capabilities), the complete dataset profile, a summary of counts, and a fingerprint (name, SHA-256, size) of every input file the adapters actually read. Integrations add their own metadata, such as attribution and acquisition details.
 
+`metadata.warnings`, when present, is a list of sentences about input problems that weakened the run without stopping it, such as a missing ATLAS column ([E1.1](1.1%20ATLAS%20stops.md#filters)). A consumer shows them with the run. The Swiss `metadata.acquisition` records `last_overpass_query_at`, when Overpass was queried, and `osm_data_at`, the Overpass `osm_base` time of the data it returned ([E1.3](1.3%20OSM%20data.md#the-download)).
+
 ## Keys and identities
 
 Rows refer to entities by key, never by position.

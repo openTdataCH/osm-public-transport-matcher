@@ -241,6 +241,33 @@ def test_get_atlas_stops_accepts_plain_csv_payload_with_bom(tmp_path):
     assert stats["after_type_filter"] == 1
 
 
+def test_get_atlas_stops_names_missing_required_columns_and_warns_about_expected_ones(tmp_path):
+    import pytest
+
+    def run(csv_text):
+        response = MagicMock()
+        response.content = csv_text.encode("utf-8")
+        response.raise_for_status.return_value = None
+        with patch("public_transport_matcher.adapters.get_atlas_data.requests.get", return_value=response), patch(
+            "public_transport_matcher.adapters.get_atlas_data.filter_points_in_switzerland",
+            side_effect=lambda df, lat_col, lon_col: df,
+        ):
+            return get_atlas_stops(str(tmp_path / "stops_ATLAS.csv"), ATLAS_ACTUAL_DATE_RESOURCE_PERMALINK)
+
+    with pytest.raises(ValueError, match=re.escape("ATLAS CSV lacks required columns: ['uicCountryCode']")):
+        run("sloid;validTo;wgs84North;wgs84East\nch:1:sloid:1;9999-12-31;47.0;8.0\n")
+
+    stats = run("sloid;uicCountryCode;validTo;wgs84North;wgs84East;designationOfficial\n"
+                "ch:1:sloid:1;85;9999-12-31;47.0;8.0;Bern\n")
+    assert stats["after_type_filter"] == 1
+    assert stats["warnings"] == [
+        "ATLAS CSV lacks columns ['designation', 'number', 'servicePointBusinessOrganisation', "
+        "'servicePointBusinessOrganisationAbbreviationEn', 'servicePointBusinessOrganisationDescriptionEn']; "
+        "their values are empty",
+        "ATLAS CSV lacks trafficPointElementType; all traffic point types were kept, not only boarding platforms",
+    ]
+
+
 def test_swiss_itineraries_collapse_same_uic_sequence_and_keep_sloid_variants(tmp_path):
     stop_times_path = tmp_path / "trip_stop_times.csv"
     pd.DataFrame([

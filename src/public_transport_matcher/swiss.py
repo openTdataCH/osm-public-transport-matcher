@@ -28,6 +28,7 @@ def _boundary_selector(path: Path):
     from shapely.geometry import shape
     from shapely import covers, points
     from shapely.ops import unary_union
+    from public_transport_matcher.adapters.get_atlas_gtfs import check_swiss_stop_columns, check_swiss_stops_found
     data = json.loads(path.read_text(encoding='utf-8'))
     if data['type'] == 'FeatureCollection':
         polygon = unary_union([shape(item['geometry']) for item in data['features']])
@@ -36,6 +37,7 @@ def _boundary_selector(path: Path):
     else:
         polygon = shape(data)
     def select(frame):
+        check_swiss_stop_columns(frame)
         valid = frame.dropna(subset=['stop_lat', 'stop_lon']).copy()
         prefixes = (
             valid['didok'].fillna('').astype(str).str.startswith('85')
@@ -43,7 +45,9 @@ def _boundary_selector(path: Path):
             | valid['stop_id'].fillna('').astype(str).str.startswith('85')
         )
         valid = valid[prefixes].copy()
-        return valid[covers(polygon, points(valid['stop_lon'].to_numpy(dtype=float), valid['stop_lat'].to_numpy(dtype=float)))].copy()
+        selected = valid[covers(polygon, points(valid['stop_lon'].to_numpy(dtype=float), valid['stop_lat'].to_numpy(dtype=float)))].copy()
+        check_swiss_stops_found(selected)
+        return selected
     return select
 
 
@@ -169,5 +173,7 @@ def run_matching(
             'attribution': {'source': 'opentransportdata.swiss', 'osm': '© OpenStreetMap contributors, ODbL'},
             'gtfs_identity_statistics': gtfs_stats,
             'gtfs_geography_filter': 'explicit_boundary' if boundary_geojson else 'preselected_input',
+            # Input problems that weakened this run without stopping it.
+            'warnings': list(source_metadata.get('atlas_filtering', {}).get('warnings', [])),
         })
     return output

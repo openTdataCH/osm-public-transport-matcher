@@ -14,7 +14,7 @@ from public_transport_matcher.progress import emit_stage_outcome, progress_stage
 
 from .get_atlas_data import ATLAS_ACTUAL_DATE_RESOURCE_PERMALINK, get_atlas_stops, get_current_gtfs_permalink
 from .get_atlas_gtfs import download_and_extract_gtfs
-from public_transport_matcher.acquisition.overpass import query_overpass
+from public_transport_matcher.acquisition.overpass import osm_base_time, query_overpass
 from .geo_utils import _ensure_swiss_geojson_cache
 from .source_freshness import probe_remote_source, source_snapshot_is_unchanged
 
@@ -221,13 +221,15 @@ def refresh_swiss(
         prepared_gtfs = None
         gtfs = None
         with progress_stage('osm.download', timing_name='acquisition.osm'):
-            query_overpass(output_path=str(staging / 'osm_data.xml'), overpass_url=overpass_url)
+            # query_overpass validates the XML before it is written and promoted.
+            osm_data_at = osm_base_time(query_overpass(output_path=str(staging / 'osm_data.xml'),
+                                                       overpass_url=overpass_url))
             os.replace(staging / 'osm_data.xml', raw / 'osm_data.xml')
         # Route products are derived once by run_matching from this exact XML.
     now = datetime.now(timezone.utc).isoformat()
     metadata.update({
         'sources': snapshots, 'acquired_at': now, 'boundary_sha256': boundary_fingerprint,
-        'last_overpass_query_at': now, 'preprocessing_reused': mapping_reused,
+        'last_overpass_query_at': now, 'osm_data_at': osm_data_at, 'preprocessing_reused': mapping_reused,
         'cache_decisions': decisions,
         'attribution': {'source': 'opentransportdata.swiss', 'osm': '© OpenStreetMap contributors, ODbL'},
     })

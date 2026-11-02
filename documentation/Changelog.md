@@ -21,9 +21,12 @@ consumer side.
 ### Inputs
 
 - **Fully retired stops downloaded** — The Overpass query also selects elements whose every stop tag is lifecycle-prefixed, and seeds their route relations. `core/osm_tags.py` defines the stop selectors and lifecycle prefixes for both the query and the parser; the existing selector lines are unchanged. See [E1.3](1.3%20OSM%20data.md#disused-stops).
+- **Validated Overpass snapshots** — An answer that does not parse as OSM XML, or that carries an Overpass `runtime error` remark inside HTTP 200, fails `osm.download` instead of being matched as a partial snapshot. HTTP 429 and 503, connection failures and timeouts are retried as well, `OVERPASS_API_URL` accepts a comma-separated list of endpoints, and the error names each endpoint's last failure without the error page. The snapshot's `osm_base` is recorded as `osm_data_at`. See [E1.3](1.3%20OSM%20data.md#the-download).
+- **Named ATLAS and Swiss GTFS schema errors** — A missing required ATLAS column fails with `ATLAS CSV lacks required columns`; missing optional columns become warnings. The Swiss GTFS boundary selector rejects a feed without `original_stop_id`, `didok` or coordinates, and a selection with no stops. See [E1.1](1.1%20ATLAS%20stops.md#filters) and [E1.2](1.2%20GTFS%20ATLAS%20data.md).
 
 ### Results and operations
 
+- **Input warnings in the manifest, schema 1** — `metadata.warnings` lists input problems that weakened the run without stopping it. The field is optional and consumers ignore it until they show it. See [Result bundle format](Result%20bundle%20format.md#manifest).
 - **Disused elements in the bundle, schema 1** — `osm_nodes` rows carry `lifecycle`, OSM `unmatched` rows a `disused` flag, disused elements are `single` stop units, and `metadata.summary.disused_osm` counts them. A missing `disused` counts as false, so earlier bundles stay valid. A consumer that predates the flag rejects a bundle with disused elements, because they have no `unmatched` problem; upgrade the consumer first. See [Result bundle format](Result%20bundle%20format.md#matches-and-unmatched-entities).
 
 ## Version 0.2.0
