@@ -1,4 +1,4 @@
-# Contributing to Public Transport Matcher
+# Contributing to OSM Public Transport Matcher
 
 Install the engine in editable mode and run the supported checks before changing a rule:
 
@@ -36,8 +36,8 @@ when broader result-validation behavior changes. A surviving mutation calls for
 inspection or a stronger behavioral test. The current sample is advisory, so a
 zero process exit does not by itself mean all mutations were killed.
 
-Generic policy types belong in `core/profile.py`; `public_transport_matcher` and
-`public_transport_matcher.profiles` re-export them as the public API.
+Generic policy types belong in `core/profile.py`; `osm_public_transport_matcher` and
+`osm_public_transport_matcher.profiles` re-export them as the public API.
 Keep acquisition, dataset profiles, integration composition, and result I/O out
 of the core layer. Static import checks enforce those boundaries; review remains
 necessary for dynamic imports and runtime effects.
@@ -58,7 +58,7 @@ baseline is not an automatic part of a green build.
 ## Add or improve a predicate
 
 1. Add a small failing example using `SourceStop` and `OsmNode` in `tests/`. Assert expected identity pairs, not only total counts. Include the ambiguous or negative case that could create a false positive.
-2. Edit or add a class in `src/public_transport_matcher/core/predicates/`. Subclass `BasePredicate` and implement `run(ctx)`. Read candidates from `ctx.source` and `ctx.osm` and record accepted links with `ctx.commit(...)`.
+2. Edit or add a class in `src/osm_public_transport_matcher/core/predicates/`. Subclass `BasePredicate` and implement `run(ctx)`. Read candidates from `ctx.source` and `ctx.osm` and record accepted links with `ctx.commit(...)`.
 3. For a new public stage, register its factory in `api._predicates` and add its identifier to the desired profile's `predicate_names`. Record its inputs, assumptions and ordering below or in the module docstring.
 4. Run the affected regression and the core suite. Preserve group propagation and candidate locks. Build reusable attribute indexes once per rule. Batch queries can contain candidates consumed by an earlier iteration; filter those candidates before committing. The 100-reference regression prevents repeated full OSM scans during exact matching.
 
@@ -79,7 +79,7 @@ Name equality alone can be ambiguous across cities. The generic profile caps nam
 
 ## Support another dataset
 
-Start with an external adapter that returns `adapters.base.AdapterResult`: `SourceStop` records and optionally a `SourceState` with explicit duplicate groups and route evidence. It does not need registration inside `public_transport_matcher`. Keep source IDs as strings and select a stable namespace without a colon. Preserve source-specific fields under namespaced `extensions`; core predicates must not require them.
+Start with an external adapter that returns `adapters.base.AdapterResult`: `SourceStop` records and optionally a `SourceState` with explicit duplicate groups and route evidence. It does not need registration inside `osm_public_transport_matcher`. Keep source IDs as strings and select a stable namespace without a colon. Preserve source-specific fields under namespaced `extensions`; core predicates must not require them.
 
 Use existing GTFS parsing when possible. Add a profile with reference mappings, thresholds and any grouping policy. Never infer that equal stop IDs or route IDs from different feeds mean the same entity. If an OSM extract's unscoped GTFS tags are assigned to a feed, make that adapter configuration explicit.
 

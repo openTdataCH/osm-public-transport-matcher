@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "public-transport-matcher"
+name = "osm-public-transport-matcher"
 version = "0.2.0"
 description = "Independent public transport stop and route matching against OpenStreetMap"
 readme = "README.md"
@@ -20,7 +20,7 @@ quality = ["pytest>=8,<9", "pytest-cov>=6,<8", "ruff>=0.11,<1", "hypothesis>=6,<
 mutation = ["mutmut>=3.8,<4"]
 
 [project.scripts]
-public-transport-matcher = "public_transport_matcher.cli:main"
+osm-public-transport-matcher = "osm_public_transport_matcher.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -31,7 +31,7 @@ pythonpath = ["src"]
 
 [tool.coverage.run]
 branch = true
-source = ["src/public_transport_matcher"]
+source = ["src/osm_public_transport_matcher"]
 relative_files = true
 
 [tool.coverage.report]
@@ -46,5 +46,5 @@ select = ["E9", "F"]
 
 [tool.mutmut]
 source_paths = ["src/"]
-only_mutate = ["src/public_transport_matcher/results/validation.py"]
+only_mutate = ["src/osm_public_transport_matcher/results/validation.py"]
 pytest_add_cli_args_test_selection = ["tests/test_results.py", "tests/test_quality_properties.py"]

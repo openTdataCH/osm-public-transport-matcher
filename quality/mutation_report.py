@@ -10,7 +10,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = "src/public_transport_matcher/results/validation.py"
+SOURCE = "src/osm_public_transport_matcher/results/validation.py"
 TESTS = ("tests/test_results.py", "tests/test_quality_properties.py")
 
 

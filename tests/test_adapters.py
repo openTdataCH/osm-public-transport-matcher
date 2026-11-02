@@ -5,11 +5,11 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from public_transport_matcher.adapters.gtfs import read_gtfs, run_gtfs
-from public_transport_matcher.adapters.osm import read_osm
-from public_transport_matcher.adapters.get_atlas_gtfs import build_gtfs_db_payload_rows
-from public_transport_matcher.adapters.osm_routes import process_osm_routes_data
-from public_transport_matcher.swiss import run_matching
+from osm_public_transport_matcher.adapters.gtfs import read_gtfs, run_gtfs
+from osm_public_transport_matcher.adapters.osm import read_osm
+from osm_public_transport_matcher.adapters.get_atlas_gtfs import build_gtfs_db_payload_rows
+from osm_public_transport_matcher.adapters.osm_routes import process_osm_routes_data
+from osm_public_transport_matcher.swiss import run_matching
 
 
 def _csv(path, rows, *, delimiter=','):
@@ -177,7 +177,7 @@ def test_swiss_fresh_gtfs_exports_identity_and_normalized_route_match_without_so
 def test_explicit_boundary_changes_between_runs_are_respected(tmp_path):
     import json
     pytest.importorskip('geopandas')
-    from public_transport_matcher.adapters.geo_utils import filter_points_in_switzerland
+    from osm_public_transport_matcher.adapters.geo_utils import filter_points_in_switzerland
     boundary = tmp_path / 'boundary.geojson'
     frame = pd.DataFrame([{'lat': 0.5, 'lon': 0.5}, {'lat': 3.5, 'lon': 3.5}])
     def write_square(start):
@@ -234,7 +234,7 @@ def test_gtfs_parent_station_cannot_compete_with_its_boarding_stop(tmp_path):
 
 
 def test_osm_evidence_only_indexes_exported_elements_and_reports_external_stops(tmp_path):
-    from public_transport_matcher.adapters.route_products import unresolved_osm_member_diagnostics
+    from osm_public_transport_matcher.adapters.route_products import unresolved_osm_member_diagnostics
     path = _osm(tmp_path / 'osm.xml')
     path.write_text(path.read_text().replace('</relation>', '<member type="node" ref="999" role="platform"/></relation>'))
     state = read_osm(path)

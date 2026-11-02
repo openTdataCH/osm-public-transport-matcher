@@ -3,9 +3,9 @@ import shutil
 
 import pytest
 
-from public_transport_matcher.adapters import acquisition
-from public_transport_matcher.adapters.source_freshness import source_snapshot_is_unchanged
-from public_transport_matcher.progress import progress_reporting
+from osm_public_transport_matcher.adapters import acquisition
+from osm_public_transport_matcher.adapters.source_freshness import source_snapshot_is_unchanged
+from osm_public_transport_matcher.progress import progress_reporting
 from test_progress import public_events
 
 
@@ -17,8 +17,8 @@ def sources(tmp_path, monkeypatch):
     monkeypatch.setattr(acquisition, 'probe_remote_source', lambda label, url: {
         'label': label, 'url': url, 'probe_ok': True, 'etag': versions[label]})
     monkeypatch.setattr(acquisition, '_ensure_swiss_geojson_cache', lambda path, **kw: Path(path).write_text('{}'))
-    import public_transport_matcher.swiss
-    monkeypatch.setattr(public_transport_matcher.swiss, '_boundary_selector', lambda path: lambda frame: frame.copy())
+    import osm_public_transport_matcher.swiss
+    monkeypatch.setattr(osm_public_transport_matcher.swiss, '_boundary_selector', lambda path: lambda frame: frame.copy())
 
     def atlas(path, url, **kw):
         calls['atlas'] += 1
@@ -174,7 +174,7 @@ def test_corrupt_parsed_cache_reuses_verified_download(tmp_path, sources, capsys
 
 @pytest.mark.parametrize('local_feed', [False, True])
 def test_full_cli_plan_resolves_on_cold_and_warm_runs(tmp_path, sources, capsys, local_feed):
-    from public_transport_matcher.cli import main
+    from osm_public_transport_matcher.cli import main
     feed = Path(__file__).resolve().parents[1] / 'examples/gtfs'
     for run in ('cold', 'warm', 'cached'):
         args = ['swiss', '--workspace', str(tmp_path), '--output', str(tmp_path / run)]

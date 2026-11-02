@@ -31,7 +31,7 @@ def main():
     parser.add_argument('--compare', type=Path, help='Fail if output hashes differ from a previous report')
     args = parser.parse_args()
     os.environ['GTFS_PROCESSING_BACKEND'] = args.backend
-    from public_transport_matcher.swiss import _fresh_gtfs_products
+    from osm_public_transport_matcher.swiss import _fresh_gtfs_products
     started, cpu = time.perf_counter(), time.process_time()
     products, stops, identities, stats = _fresh_gtfs_products(
         args.gtfs, pd.read_csv(args.atlas, sep=';', dtype=str), args.boundary)

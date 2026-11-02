@@ -5,26 +5,26 @@ from __future__ import annotations
 
 import pytest
 
-from public_transport_matcher.core.models import SourceStop, Reference, MatchRecord, OsmNode
-from public_transport_matcher.core.pipeline import MatchingContext, run_pipeline
-from public_transport_matcher.core.predicates import BasePredicate
-from public_transport_matcher.core.predicates.distance_matching import (
+from osm_public_transport_matcher.core.models import SourceStop, Reference, MatchRecord, OsmNode
+from osm_public_transport_matcher.core.pipeline import MatchingContext, run_pipeline
+from osm_public_transport_matcher.core.predicates import BasePredicate
+from osm_public_transport_matcher.core.predicates.distance_matching import (
     NearestDistancePredicate,
     bipartite_match_max_cardinality,
     GroupProximityPredicate,
 )
-from public_transport_matcher.core.predicates.exact_matching import ExactReferencePredicate
-from public_transport_matcher.core.predicates.name_matching import NameMatchPredicate
-from public_transport_matcher.core.predicates.trio_distance_matching import TrioDistanceMatchingPredicate
-from public_transport_matcher.core.predicates.route_matching_gtfs import RouteMatchPredicate
-from public_transport_matcher.api import _predicates
-from public_transport_matcher.profiles import SWITZERLAND
+from osm_public_transport_matcher.core.predicates.exact_matching import ExactReferencePredicate
+from osm_public_transport_matcher.core.predicates.name_matching import NameMatchPredicate
+from osm_public_transport_matcher.core.predicates.trio_distance_matching import TrioDistanceMatchingPredicate
+from osm_public_transport_matcher.core.predicates.route_matching_gtfs import RouteMatchPredicate
+from osm_public_transport_matcher.api import _predicates
+from osm_public_transport_matcher.profiles import SWITZERLAND
 DEFAULT_PIPELINE = _predicates(SWITZERLAND)
-from public_transport_matcher.core.problem_detection.context import ProblemContext
-from public_transport_matcher.core.problem_detection.stop_predicates import contradicts_route_matching_problem
-from public_transport_matcher.core.state import SourceState, OsmState
-from public_transport_matcher.core.utils.common import haversine_distance
-from public_transport_matcher.profiles.switzerland import normalize_route_id
+from osm_public_transport_matcher.core.problem_detection.context import ProblemContext
+from osm_public_transport_matcher.core.problem_detection.stop_predicates import contradicts_route_matching_problem
+from osm_public_transport_matcher.core.state import SourceState, OsmState
+from osm_public_transport_matcher.core.utils.common import haversine_distance
+from osm_public_transport_matcher.profiles.switzerland import normalize_route_id
 
 
 def _source_stop(source_id, lat, lon, station_ref, platform_code, name, operator):

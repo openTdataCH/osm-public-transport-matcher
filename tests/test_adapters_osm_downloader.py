@@ -13,8 +13,8 @@ class DummyResponse:
 
 
 def test_overpass_query_and_route_parsing_live_in_separate_modules():
-    from public_transport_matcher.acquisition.overpass import build_public_transport_query
-    from public_transport_matcher.adapters.osm_routes import process_osm_routes_data
+    from osm_public_transport_matcher.acquisition.overpass import build_public_transport_query
+    from osm_public_transport_matcher.adapters.osm_routes import process_osm_routes_data
 
     assert 'ISO3166-1"="FR' in build_public_transport_query('fr')
     assert process_osm_routes_data('<osm/>', out_dir=None)['osm_route_relations'].empty
@@ -22,7 +22,7 @@ def test_overpass_query_and_route_parsing_live_in_separate_modules():
 
 def test_query_overpass_posts_raw_query(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    from public_transport_matcher.acquisition import overpass
+    from osm_public_transport_matcher.acquisition import overpass
     captured = {}
 
     class DummySession:
@@ -47,7 +47,7 @@ def test_query_overpass_posts_raw_query(monkeypatch, tmp_path):
 
 def test_query_overpass_raises_on_http_error(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    from public_transport_matcher.acquisition import overpass
+    from osm_public_transport_matcher.acquisition import overpass
 
     class DummySession:
         def post(self, url, data=None, headers=None, timeout=None):
@@ -65,7 +65,7 @@ def test_query_overpass_raises_on_http_error(monkeypatch, tmp_path):
 
 def test_query_overpass_retries_504_then_succeeds(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    from public_transport_matcher.acquisition import overpass
+    from osm_public_transport_matcher.acquisition import overpass
     monkeypatch.setattr(overpass, "OVERPASS_MAX_RETRIES", 2)
     monkeypatch.setattr(overpass, "OVERPASS_RETRY_BACKOFF_SECONDS", 0.25)
     sleeps = []
@@ -92,7 +92,7 @@ def test_query_overpass_retries_504_then_succeeds(monkeypatch, tmp_path):
 
 def test_query_overpass_exhausts_retries_for_502(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    from public_transport_matcher.acquisition import overpass
+    from osm_public_transport_matcher.acquisition import overpass
     monkeypatch.setattr(overpass, "OVERPASS_MAX_RETRIES", 2)
     monkeypatch.setattr(overpass, "OVERPASS_RETRY_BACKOFF_SECONDS", 0.5)
     sleeps = []
@@ -123,7 +123,7 @@ def test_query_overpass_exhausts_retries_for_502(monkeypatch, tmp_path):
 def test_query_overpass_retries_rate_limits_and_timeouts(monkeypatch, tmp_path):
     import requests
     monkeypatch.chdir(tmp_path)
-    from public_transport_matcher.acquisition import overpass
+    from osm_public_transport_matcher.acquisition import overpass
     sleeps = []
     monkeypatch.setattr(overpass.time, "sleep", sleeps.append)
     answers = [DummyResponse(status_code=429, text="Too Many Requests"), requests.ReadTimeout("slow"),
@@ -144,7 +144,7 @@ def test_query_overpass_retries_rate_limits_and_timeouts(monkeypatch, tmp_path):
 
 def test_query_overpass_rejects_runtime_errors_and_moves_to_the_next_endpoint(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    from public_transport_matcher.acquisition import overpass
+    from osm_public_transport_matcher.acquisition import overpass
     sleeps = []
     monkeypatch.setattr(overpass.time, "sleep", sleeps.append)
     first, second, third = (f"https://{name}.example/api/interpreter" for name in ("first", "second", "third"))
@@ -184,14 +184,14 @@ def test_query_overpass_rejects_runtime_errors_and_moves_to_the_next_endpoint(mo
     ("<html><body>Server busy</body></html>", "not an OSM document"),
 ])
 def test_check_osm_snapshot_rejects_incomplete_answers(text, message):
-    from public_transport_matcher.acquisition.overpass import OverpassError, check_osm_snapshot
+    from osm_public_transport_matcher.acquisition.overpass import OverpassError, check_osm_snapshot
 
     with pytest.raises(OverpassError, match=message):
         check_osm_snapshot(text)
 
 
 def test_osm_base_time_reads_the_snapshot_header():
-    from public_transport_matcher.acquisition.overpass import osm_base_time
+    from osm_public_transport_matcher.acquisition.overpass import osm_base_time
 
     header = ('<?xml version="1.0" encoding="UTF-8"?>\n<osm version="0.6">\n<note>ODbL</note>\n'
               '<meta osm_base="2026-10-31T19:03:06Z" areas="2026-10-31T14:54:51Z"/>\n</osm>')
@@ -201,7 +201,7 @@ def test_osm_base_time_reads_the_snapshot_header():
 
 def test_process_osm_routes_data_writes_route_master_and_relation_csvs(monkeypatch, tmp_path):
         monkeypatch.chdir(tmp_path)
-        from public_transport_matcher.adapters.osm_routes import process_osm_routes_data
+        from osm_public_transport_matcher.adapters.osm_routes import process_osm_routes_data
 
         xml_data = """
         <osm version="0.6">
@@ -266,7 +266,7 @@ def test_process_osm_routes_data_writes_route_master_and_relation_csvs(monkeypat
 
 def test_process_osm_routes_data_deduplicates_duplicate_route_master_relation_members(monkeypatch, tmp_path):
         monkeypatch.chdir(tmp_path)
-        from public_transport_matcher.adapters.osm_routes import process_osm_routes_data
+        from osm_public_transport_matcher.adapters.osm_routes import process_osm_routes_data
 
         xml_data = """
         <osm version="0.6">
@@ -301,8 +301,8 @@ def test_process_osm_routes_data_deduplicates_duplicate_route_master_relation_me
 
 def test_overpass_query_and_parser_share_the_lifecycle_definition():
     import re
-    from public_transport_matcher.acquisition.overpass import build_public_transport_query
-    from public_transport_matcher.core.osm_tags import LIFECYCLE_KEY_PATTERN, has_active_stop_tag, lifecycle_of
+    from osm_public_transport_matcher.acquisition.overpass import build_public_transport_query
+    from osm_public_transport_matcher.core.osm_tags import LIFECYCLE_KEY_PATTERN, has_active_stop_tag, lifecycle_of
 
     query = build_public_transport_query()
     assert '["public_transport"~"platform|stop_position|station|halt|stop"]' in query

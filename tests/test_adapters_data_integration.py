@@ -9,7 +9,7 @@ from datetime import date
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from public_transport_matcher.adapters.get_atlas_data import (
+from osm_public_transport_matcher.adapters.get_atlas_data import (
     ATLAS_ACTUAL_DATE_RESOURCE_PERMALINK,
     _build_itinerary_frames,
     get_atlas_stops,
@@ -195,7 +195,7 @@ def test_gtfs_permalink_links_do_not_contain_stale_years():
     current_year = str(date.today().year)
     link_pattern = re.compile(r"timetable-(\d{4})-gtfs2020")
 
-    import public_transport_matcher.adapters.get_atlas_data as atlas_adapter
+    import osm_public_transport_matcher.adapters.get_atlas_data as atlas_adapter
     checked_files = [Path(atlas_adapter.__file__)]
 
     stale_hits = []
@@ -227,8 +227,8 @@ def test_get_atlas_stops_accepts_plain_csv_payload_with_bom(tmp_path):
 
     output_path = tmp_path / "stops_ATLAS.csv"
 
-    with patch("public_transport_matcher.adapters.get_atlas_data.requests.get", return_value=mocked_response), patch(
-        "public_transport_matcher.adapters.get_atlas_data.filter_points_in_switzerland",
+    with patch("osm_public_transport_matcher.adapters.get_atlas_data.requests.get", return_value=mocked_response), patch(
+        "osm_public_transport_matcher.adapters.get_atlas_data.filter_points_in_switzerland",
         side_effect=lambda df, lat_col, lon_col: df,
     ):
         stats = get_atlas_stops(str(output_path), ATLAS_ACTUAL_DATE_RESOURCE_PERMALINK)
@@ -248,8 +248,8 @@ def test_get_atlas_stops_names_missing_required_columns_and_warns_about_expected
         response = MagicMock()
         response.content = csv_text.encode("utf-8")
         response.raise_for_status.return_value = None
-        with patch("public_transport_matcher.adapters.get_atlas_data.requests.get", return_value=response), patch(
-            "public_transport_matcher.adapters.get_atlas_data.filter_points_in_switzerland",
+        with patch("osm_public_transport_matcher.adapters.get_atlas_data.requests.get", return_value=response), patch(
+            "osm_public_transport_matcher.adapters.get_atlas_data.filter_points_in_switzerland",
             side_effect=lambda df, lat_col, lon_col: df,
         ):
             return get_atlas_stops(str(tmp_path / "stops_ATLAS.csv"), ATLAS_ACTUAL_DATE_RESOURCE_PERMALINK)

@@ -1,8 +1,8 @@
 import pytest
 import pandas as pd
 
-from public_transport_matcher.adapters import get_atlas_gtfs as gtfs_mod
-from public_transport_matcher.adapters.get_atlas_gtfs import parse_gtfs_stop_ids
+from osm_public_transport_matcher.adapters import get_atlas_gtfs as gtfs_mod
+from osm_public_transport_matcher.adapters.get_atlas_gtfs import parse_gtfs_stop_ids
 
 
 def test_parse_gtfs_stop_ids_uses_didok_for_sloid_stop_ids():
@@ -73,7 +73,7 @@ def test_select_swiss_gtfs_stops_fails_clearly_when_no_swiss_identifiers(monkeyp
 
 def test_swiss_boundary_selector_requires_identifier_columns_and_some_stops(tmp_path):
     import json
-    from public_transport_matcher.swiss import _boundary_selector
+    from osm_public_transport_matcher.swiss import _boundary_selector
 
     boundary = tmp_path / 'boundary.geojson'
     boundary.write_text(json.dumps({'type': 'Polygon', 'coordinates': [[[5, 45], [11, 45], [11, 48], [5, 48], [5, 45]]]}))

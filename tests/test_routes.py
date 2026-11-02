@@ -1,4 +1,4 @@
-from public_transport_matcher.routes import (
+from osm_public_transport_matcher.routes import (
     _build_itinerary_rows,
     _count_stop_sequence_matches,
     _resolve_osm_stop_fields,
@@ -146,7 +146,7 @@ def test_build_itinerary_rows_prefers_osm_from_to_for_display_and_to_for_headsig
 
 def test_indexed_family_candidates_equal_exhaustive_scoring():
     import random
-    from public_transport_matcher.routes import _candidate_line_family_pairs, _score_line_family_pair
+    from osm_public_transport_matcher.routes import _candidate_line_family_pairs, _score_line_family_pair
     rng = random.Random(173)
     source = [dict(id=i, side='source', gtfs_route_id=rng.choice(['R1', 'R2', 'R3', None]),
                    normalized_route_id=rng.choice(['N1', 'N2', None])) for i in range(1, 31)]
@@ -167,7 +167,7 @@ def test_indexed_family_candidates_equal_exhaustive_scoring():
 def test_stop_sequence_matches_equal_exhaustive_longest_common_subsequence():
     import random
     from functools import lru_cache
-    from public_transport_matcher.routes import _same_stop, _stop_identity
+    from osm_public_transport_matcher.routes import _same_stop, _stop_identity
     rng = random.Random(93)
     pool = [{'source_stop_key': 'a', 'station_ref': '1'}, {'source_stop_key': 'b', 'station_ref': '1'},
             {'source_stop_key_variants': '["a", "c"]'}, {'station_ref': '1'}, {}, {'station_ref': '2'}]

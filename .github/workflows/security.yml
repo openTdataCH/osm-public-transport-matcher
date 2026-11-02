@@ -36,7 +36,7 @@ jobs:
           requirements = sorted(
               f"{item['metadata']['name']}=={item['metadata']['version']}"
               for item in packages
-              if item['metadata']['name'].lower().replace('_', '-') != 'public-transport-matcher'
+              if item['metadata']['name'].lower().replace('_', '-') != 'osm-public-transport-matcher'
           )
           if not requirements:
               raise SystemExit('Production dependency collection returned no packages')

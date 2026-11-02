@@ -3,9 +3,9 @@ import csv
 import pandas as pd
 import pytest
 
-from public_transport_matcher.adapters.gtfs_columnar import load_gtfs_columnar, iter_trip_patterns, write_cache, read_cache
-from public_transport_matcher.adapters.get_atlas_gtfs import load_gtfs_data_streaming
-from public_transport_matcher.swiss import _map_gtfs_products
+from osm_public_transport_matcher.adapters.gtfs_columnar import load_gtfs_columnar, iter_trip_patterns, write_cache, read_cache
+from osm_public_transport_matcher.adapters.get_atlas_gtfs import load_gtfs_data_streaming
+from osm_public_transport_matcher.swiss import _map_gtfs_products
 
 
 def write(path, rows):

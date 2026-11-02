@@ -1,6 +1,6 @@
 # Matching engine changelog
 
-This page records notable changes to the standalone `public-transport-matcher` package,
+This page records notable changes to the standalone `osm-public-transport-matcher` package,
 its adapters, matching behavior, result production and command-line interface.
 Review-application releases are recorded separately in the
 [review application changelog](https://github.com/openTdataCH/stop_sync_osm_atlas/blob/main/documentation/Changelog.md).
@@ -26,6 +26,7 @@ consumer side.
 
 ### Results and operations
 
+- **Package renamed** — The distribution and command are now `osm-public-transport-matcher` and the import package is `osm_public_transport_matcher`, matching the repository name. Replace `public_transport_matcher` imports and `public-transport-matcher` commands; the API, command options and result bundle are unchanged.
 - **Input warnings in the manifest, schema 1** — `metadata.warnings` lists input problems that weakened the run without stopping it. The field is optional and consumers ignore it until they show it. See [Result bundle format](Result%20bundle%20format.md#manifest).
 - **Disused elements in the bundle, schema 1** — `osm_nodes` rows carry `lifecycle`, OSM `unmatched` rows a `disused` flag, disused elements are `single` stop units, and `metadata.summary.disused_osm` counts them. A missing `disused` counts as false, so earlier bundles stay valid. A consumer that predates the flag rejects a bundle with disused elements, because they have no `unmatched` problem; upgrade the consumer first. See [Result bundle format](Result%20bundle%20format.md#matches-and-unmatched-entities).
 

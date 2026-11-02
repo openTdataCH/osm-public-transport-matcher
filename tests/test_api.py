@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from public_transport_matcher.api import match
-from public_transport_matcher.core.models import SourceStop, OsmNode, Reference
-from public_transport_matcher.core.state import SourceState, OsmState
-from public_transport_matcher.core.route_state import RouteState
-from public_transport_matcher.profiles import MatchingProfile, ReferenceRule, SWITZERLAND
+from osm_public_transport_matcher.api import match
+from osm_public_transport_matcher.core.models import SourceStop, OsmNode, Reference
+from osm_public_transport_matcher.core.state import SourceState, OsmState
+from osm_public_transport_matcher.core.route_state import RouteState
+from osm_public_transport_matcher.profiles import MatchingProfile, ReferenceRule, SWITZERLAND
 
 
 def test_non_swiss_fixture_has_complete_results_without_identifiers_or_routes():
@@ -155,7 +155,7 @@ def test_source_duplicate_groups_must_be_disjoint():
 
 
 def test_quality_statistics_accept_missing_groups_and_equatorial_coordinates():
-    from public_transport_matcher.statistics import compute_quality_metrics
+    from osm_public_transport_matcher.statistics import compute_quality_metrics
     output = match([SourceStop('equator', '1', 0., 0., name='Stop')], [OsmNode('1', 0., 0., name='Stop')])
     metrics = compute_quality_metrics(output.matched, output.all_osm_nodes)
     assert metrics['cross_predicate_consistency']['total_evaluated'] == 1
@@ -164,8 +164,8 @@ def test_quality_statistics_accept_missing_groups_and_equatorial_coordinates():
 
 def test_core_import_boundary_has_no_app_or_parser_dependencies():
     import ast
-    import public_transport_matcher.core
-    root = Path(public_transport_matcher.core.__file__).parent
+    import osm_public_transport_matcher.core
+    root = Path(osm_public_transport_matcher.core.__file__).parent
     forbidden = {'backend', 'flask', 'sqlalchemy', 'pandas', 'requests', 'os', 'pathlib'}
     for path in root.rglob('*.py'):
         tree = ast.parse(path.read_text())
@@ -179,7 +179,7 @@ def test_core_import_boundary_has_no_app_or_parser_dependencies():
 
 
 def test_quality_statistics_treat_co_located_elements_as_equally_close():
-    from public_transport_matcher.statistics import compute_quality_metrics
+    from osm_public_transport_matcher.statistics import compute_quality_metrics
     output = match([SourceStop('demo', '1', 52., 13., name='Target')],
                    [OsmNode('1', 52., 13., name='Other'), OsmNode('2', 52., 13., name='Target')])
     metrics = compute_quality_metrics(output.matched, output.all_osm_nodes)
@@ -232,7 +232,7 @@ def test_station_group_proximity_does_not_treat_equal_unscoped_values_as_evidenc
 
 
 def test_exact_reference_builds_osm_index_once_for_many_identifiers(monkeypatch):
-    from public_transport_matcher.core.state import OsmState
+    from osm_public_transport_matcher.core.state import OsmState
     calls = []
     original = OsmState.get_all_unmatched_grouped
     def counted(state, key):

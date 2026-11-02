@@ -1,4 +1,4 @@
-from public_transport_matcher.routes import _choose_best_itinerary_pairs
+from osm_public_transport_matcher.routes import _choose_best_itinerary_pairs
 
 
 def test_choose_best_itinerary_pairs_handles_large_source_small_osm_without_recursion_error():

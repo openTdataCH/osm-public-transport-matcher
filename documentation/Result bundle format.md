@@ -116,7 +116,7 @@ Two counters complete the section: `matched_routes`, the number of family matche
 - A family's `key` is the source `route_id`, or for OSM the route master ID, normalized `gtfs:route_id`, synthetic key or relation ID, as `family_origin` states. An itinerary's `key` is the source itinerary ID or the OSM relation ID. Together with `side` (and `family_origin` for families), the key recognises the same line or direction in another run.
 - A stop call's `source_stop_key` is a source stop key from this bundle, or empty. `source_stop_key_variants` is a JSON-encoded list of further source stop keys that the call stands for. OSM stop calls carry their `osm_node_id`, and a `source_stop_key` when the node was matched to a source stop.
 
-`src/public_transport_matcher/routes.py` defines the detailed route fields and `src/public_transport_matcher/results/validation.py` checks them. The route model is explained in [E3 Routes](3.%20Routes.md).
+`src/osm_public_transport_matcher/routes.py` defines the detailed route fields and `src/osm_public_transport_matcher/results/validation.py` checks them. The route model is explained in [E3 Routes](3.%20Routes.md).
 
 ## Extensions
 

@@ -1,4 +1,4 @@
-# Public Transport Matcher
+# OSM Public Transport Matcher
 
 A Python producer package for matching public transport stops and routes against OpenStreetMap. It contains a source-neutral matching core, curated format adapters, optional acquisition clients and maintained first-party integrations. It returns complete results: matches and their evidence, unmatched entities, stop groups, discrepancies and diagnostics. It runs independently of the review website, Flask, PostGIS and any database service. Swiss GTFS preprocessing uses an embedded DuckDB database for temporary local work.
 
@@ -40,8 +40,8 @@ The basic package depends on NumPy and SciPy. Extras add only the dependencies f
 This example needs only the basic package:
 
 ```python
-from public_transport_matcher.api import match
-from public_transport_matcher.core.models import SourceStop, OsmNode
+from osm_public_transport_matcher.api import match
+from osm_public_transport_matcher.core.models import SourceStop, OsmNode
 
 source = [SourceStop("my-agency", "central", 52.525, 13.369, name="Central")]
 osm = [OsmNode("100", 52.52501, 13.36901, name="Central", public_transport="platform")]
@@ -61,17 +61,17 @@ A tiny synthetic GTFS example is included in `examples/`. GTFS parsing adds pand
 
 ```bash
 python -m pip install -e '.[gtfs]'
-public-transport-matcher gtfs --source examples/gtfs --namespace demo --osm examples/osm.xml --output /tmp/demo-results
+osm-public-transport-matcher gtfs --source examples/gtfs --namespace demo --osm examples/osm.xml --output /tmp/demo-results
 ```
 
 For the Swiss workflow:
 
 ```bash
 python -m pip install -e '.[swiss]'
-public-transport-matcher swiss --source /path/to/stops_ATLAS.csv --osm /path/to/osm_data.xml --processed /path/to/processed --output /tmp/swiss-results
+osm-public-transport-matcher swiss --source /path/to/stops_ATLAS.csv --osm /path/to/osm_data.xml --processed /path/to/processed --output /tmp/swiss-results
 ```
 
-Use `public-transport-matcher --help` for acquisition and GTFS refresh options. Commands take explicit paths; the in-memory API never reads files, environment variables or credentials. Output directories must be new. Result writing validates a temporary bundle before publishing it.
+Use `osm-public-transport-matcher --help` for acquisition and GTFS refresh options. Commands take explicit paths; the in-memory API never reads files, environment variables or credentials. Output directories must be new. Result writing validates a temporary bundle before publishing it.
 
 See [the result bundle format](documentation/Result%20bundle%20format.md) for the integration contract. The review application consumes that format without importing this package.
 
@@ -90,14 +90,14 @@ A matching-algorithm change normally increments the package version but does not
 
 Release checklist:
 
-1. Update the version in `pyproject.toml` and `src/public_transport_matcher/__init__.py`, and update the changelog.
+1. Update the version in `pyproject.toml` and `src/osm_public_transport_matcher/__init__.py`, and update the changelog.
 2. Run the full engine suite and the producer-to-consumer contract test.
 3. Commit the release, then create an annotated `v<package-version>` tag on that exact commit.
 4. Push the commit and tag. Never force-move an existing release tag.
 5. In each consumer deployment, resolve the tag once and store its full commit SHA as `ENGINE_REF`; rebuild the scheduler and documentation images.
 
 ```bash
-git tag -a v0.2.0 -m "Public Transport Matcher 0.2.0"
+git tag -a v0.2.0 -m "OSM Public Transport Matcher 0.2.0"
 git push origin main
 git push origin v0.2.0
 git rev-list -n 1 v0.2.0
@@ -127,11 +127,11 @@ The built-in adapter set is intentionally curated. External datasets can impleme
 Build from the repository root; its Docker build context contains no review-application code:
 
 ```bash
-docker build -t public-transport-matcher .
+docker build -t osm-public-transport-matcher .
 mkdir -p results
 docker run --rm --user "$(id -u):$(id -g)" \
   -v "$PWD/examples:/inputs:ro" -v "$PWD/results:/results" \
-  public-transport-matcher gtfs --source /inputs/gtfs --namespace demo \
+  osm-public-transport-matcher gtfs --source /inputs/gtfs --namespace demo \
   --osm /inputs/osm.xml --output /results/demo
 ```
 The image includes all supported adapter extras. Local inputs are mounted read-only; completed bundles appear in the mounted output directory. Choose a new output name for each run.
@@ -141,8 +141,8 @@ The image includes all supported adapter extras. Local inputs are mounted read-o
 Use `MatchingProfile` for a dataset or agency. The default profile runs name, route and distance rules. It enables exact matching only for explicitly configured reference mappings; station grouping is disabled by default. The Swiss profile enables UIC station-reference allocation and the OSM pair/trio rules. `osm_station_ref_tag` selects an agency's station-reference tag without rewriting OSM tags; its corresponding station-scoped `ReferenceRule` must explicitly permit comparison. Generic name checks use OSM `name`, falling back to `uic_name`; the Swiss profile uses `uic_name`.
 
 ```python
-from public_transport_matcher.core.models import Reference, SourceStop
-from public_transport_matcher.profiles import MatchingProfile, ReferenceRule
+from osm_public_transport_matcher.core.models import Reference, SourceStop
+from osm_public_transport_matcher.profiles import MatchingProfile, ReferenceRule
 
 profile = MatchingProfile(
     profile_id="city-transit",
