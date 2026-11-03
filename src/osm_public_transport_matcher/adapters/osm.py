@@ -5,6 +5,7 @@ import xml.etree.ElementTree as ET
 from collections import defaultdict
 from pathlib import Path
 from osm_public_transport_matcher.core.models import OsmNode
+from osm_public_transport_matcher.adapters.osm_routes import public_transport_relation_ids
 from osm_public_transport_matcher.core.osm_tags import lifecycle_of
 from osm_public_transport_matcher.core.state import OsmState
 
@@ -164,9 +165,10 @@ def read_osm(xml_file: str | Path, *, route_namespace: str | None = None, route_
     # Direction strings are derived from the relation pass directly.
     loaded_dirs_from_csv = False
 
+    service_relation_ids = public_transport_relation_ids(root)
     for relation in root.iter("relation"):
         rel_tags: dict[str, str] = {t.get('k'): t.get('v') for t in relation.findall('./tag')}
-        if rel_tags.get('type') != 'route':
+        if rel_tags.get('type') != 'route' or relation.get('id') not in service_relation_ids:
             continue
 
         members: list[str] = []

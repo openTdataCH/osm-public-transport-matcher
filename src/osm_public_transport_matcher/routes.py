@@ -584,7 +584,7 @@ def _build_itinerary_rows(
         line_family_id = relation_id_to_family_id.get(row['relation_id'])
         if line_family_id is None:
             continue
-        call_rows = relation_stop_rows_by_relation.get(row['relation_id'], [])
+        call_rows = _one_call_per_stop_visit(relation_stop_rows_by_relation.get(row['relation_id'], []))
         itinerary_id = next(itinerary_id_counter)
         sequence_pattern_hash = _hash_sequence([
             _first_non_empty(call_row.get('canonical_stop_key'), f"osm:{call_row.get('osm_node_id')}")
@@ -709,6 +709,40 @@ def _same_stop(left, right) -> bool:
     if left_keys and right_keys:
         return bool(left_keys & right_keys)
     return bool(left_station and left_station == right_station)
+
+
+def _member_kind(role: Any) -> str | None:
+    role = _to_text(role) or ''
+    if role.startswith('stop'):
+        return 'stop'
+    if role.startswith('platform'):
+        return 'platform'
+    return None
+
+
+def _relation_stop_identity(row: dict[str, Any]) -> tuple[frozenset[str], str | None]:
+    resolved = _to_text(row.get('resolved_source_key'))
+    return frozenset({resolved} if resolved else ()), _to_text(row.get('station_ref'))
+
+
+def _one_call_per_stop_visit(call_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge the stop position and the platform of one stop visit into one call.
+
+    PTv2 relations list both members of a stop one after the other. As two
+    calls they double the OSM itinerary length and halve the stop ratio of an
+    itinerary that matches its source itinerary exactly. The merged call keeps
+    the member with a resolved source key, else the first one.
+    """
+    calls: list[dict[str, Any]] = []
+    for row in call_rows:
+        previous = calls[-1] if calls else None
+        kinds = {_member_kind(previous.get('stop_role')), _member_kind(row.get('stop_role'))} if previous else set()
+        if kinds == {'stop', 'platform'} and _same_stop(_relation_stop_identity(previous), _relation_stop_identity(row)):
+            if previous.get('resolved_source_key') is None and row.get('resolved_source_key') is not None:
+                calls[-1] = row
+            continue
+        calls.append(row)
+    return calls
 
 
 def _count_stop_sequence_matches(source_calls, osm_calls):

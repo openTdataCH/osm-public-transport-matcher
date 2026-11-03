@@ -13,6 +13,7 @@ from osm_public_transport_matcher import __version__
 from osm_public_transport_matcher.core.osm_tags import (
     LIFECYCLE_KEY_PATTERN,
     LIFECYCLE_VALUE_PATTERN,
+    PUBLIC_TRANSPORT_ROUTE_PATTERN,
     STOP_TAG_SELECTORS,
 )
 
@@ -38,6 +39,7 @@ def build_public_transport_query(country_code: str = "CH") -> str:
     """Return the Overpass QL query for an ISO 3166-1 alpha-2 area."""
     if not country_code.isalpha() or len(country_code) != 2:
         raise ValueError("country_code must be a two-letter ISO code")
+    routes = PUBLIC_TRANSPORT_ROUTE_PATTERN
     stop_selectors = "\n".join(
         f'            node(area.searchArea)["{key}"{operator}"{value}"];'
         for key, operator, value in STOP_TAG_SELECTORS
@@ -57,15 +59,18 @@ def build_public_transport_query(country_code: str = "CH") -> str:
         )->.candidate_ways;
 
         (
-            relation(bn.pt_nodes)[type=route][route!=hiking];
-            relation(bw.candidate_ways)[type=route][route!=hiking];
+            relation(bn.pt_nodes)[type=route][route~"{routes}"];
+            relation(bw.candidate_ways)[type=route][route~"{routes}"];
+            relation(bn.pt_nodes)[type=route][!route];
+            relation(bw.candidate_ways)[type=route][!route];
         )->.seed_routes;
 
-        relation(br.seed_routes)[type=route_master]->.route_masters;
+        relation(br.seed_routes)[type=route_master][route_master~"{routes}"]->.route_masters;
 
         (
             .seed_routes;
-            relation(r.route_masters)[type=route][route!=hiking];
+            relation(r.route_masters)[type=route][route~"{routes}"];
+            relation(r.route_masters)[type=route][!route];
         )->.routes;
 
         .pt_nodes out body qt;

@@ -1,4 +1,4 @@
-"""The OSM tags that make an element a stop, and the lifecycle prefixes that retire one.
+"""The OSM tags that make an element a stop or a route a public transport service.
 
 The Overpass query and the classification of parsed elements both read these
 definitions, so what is downloaded and how it is classified cannot drift apart.
@@ -35,6 +35,15 @@ _STOP_VALUES = tuple(dict.fromkeys(
 LIFECYCLE_KEY_PATTERN = f"^({'|'.join(LIFECYCLE_PREFIXES)}):({'|'.join(_STOP_KEYS)})$"
 LIFECYCLE_VALUE_PATTERN = f"^({'|'.join(_STOP_VALUES)})$"
 
+# route=* values of public transport services. Other route relations also pass
+# through stops: infrastructure (railway, tracks) and leisure routes (piste,
+# mtb, foot, ski...). They are not services and are left out.
+PUBLIC_TRANSPORT_ROUTES = (
+    'bus', 'trolleybus', 'minibus', 'share_taxi', 'coach', 'tram', 'light_rail',
+    'train', 'subway', 'monorail', 'ferry', 'funicular', 'aerialway',
+)
+PUBLIC_TRANSPORT_ROUTE_PATTERN = f"^({'|'.join(PUBLIC_TRANSPORT_ROUTES)})$"
+
 _LIFECYCLE_KEY = re.compile(LIFECYCLE_KEY_PATTERN)
 _LIFECYCLE_VALUE = re.compile(LIFECYCLE_VALUE_PATTERN)
 
@@ -61,3 +70,12 @@ def lifecycle_of(tags: dict[str, str]) -> str | None:
         if match and _LIFECYCLE_VALUE.match(value or ''):
             found.add(match.group(1))
     return next((prefix for prefix in LIFECYCLE_PREFIXES if prefix in found), None)
+
+
+def is_public_transport_route(route: str | None, route_master: str | None = None) -> bool:
+    """Whether a route relation is a public transport service.
+
+    A relation without a ``route`` tag takes the ``route_master`` value of its
+    route master; such relations are common in route masters of trams and buses.
+    """
+    return (route or route_master or '') in PUBLIC_TRANSPORT_ROUTES

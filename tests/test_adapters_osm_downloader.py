@@ -39,7 +39,10 @@ def test_query_overpass_posts_raw_query(monkeypatch, tmp_path):
     assert captured["url"] == overpass.OVERPASS_URL
     assert isinstance(captured["data"], bytes)
     assert captured["data"].decode("utf-8").startswith("[out:xml]")
-    assert '[type=route][route!=hiking]' in captured["data"].decode("utf-8")
+    query = captured["data"].decode("utf-8")
+    assert '[type=route][route~"^(bus|trolleybus|' in query
+    assert '[type=route_master][route_master~"^(bus|' in query
+    assert 'hiking' not in query
     assert captured["headers"]["Content-Type"].startswith("text/plain")
     assert captured["timeout"] == (30, 600)
     assert Path("data/raw/osm_data.xml").read_text(encoding="utf-8") == result
@@ -315,3 +318,35 @@ def test_overpass_query_and_parser_share_the_lifecycle_definition():
     assert lifecycle_of({'construction:highway': 'bus_stop', 'highway': 'bus_stop'}) is None
     assert has_active_stop_tag({'disused:highway': 'bus_stop', 'public_transport': 'platform'})
     assert not has_active_stop_tag({'disused:highway': 'bus_stop', 'disused:public_transport': 'platform'})
+
+
+def test_process_osm_routes_data_keeps_only_public_transport_services():
+    from osm_public_transport_matcher.adapters.osm_routes import process_osm_routes_data
+
+    def route(relation_id, route=None):
+        tag = f'<tag k="route" v="{route}" />' if route else ''
+        return f'<relation id="{relation_id}"><tag k="type" v="route" />{tag}<member type="node" ref="1" role="stop" /></relation>'
+
+    xml_data = f"""
+    <osm version="0.6">
+        <node id="1" lat="47.1" lon="8.1"><tag k="public_transport" v="stop_position" /></node>
+        {route(10, 'tram')}
+        {route(11)}
+        {route(12)}
+        {route(13, 'piste')}
+        {route(14, 'railway')}
+        <relation id="20"><tag k="type" v="route_master" /><tag k="route_master" v="tram" />
+            <member type="relation" ref="10" /><member type="relation" ref="11" /><member type="relation" ref="13" />
+        </relation>
+        <relation id="21"><tag k="type" v="route_master" /><tag k="route_master" v="piste" />
+            <member type="relation" ref="12" />
+        </relation>
+    </osm>
+    """
+
+    products = process_osm_routes_data(xml_data, out_dir=None)
+
+    # 11 has no route tag and takes "tram" from its route master; 12 belongs to
+    # a piste master, 13 is a piste in a tram master, 14 is infrastructure.
+    assert sorted(products['osm_route_relations']['relation_id']) == ['10', '11']
+    assert list(products['osm_route_masters']['route_master_id']) == ['20']

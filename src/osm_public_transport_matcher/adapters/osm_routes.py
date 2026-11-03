@@ -5,6 +5,32 @@ import csv
 import os
 import xml.etree.ElementTree as ET
 
+from osm_public_transport_matcher.core.osm_tags import is_public_transport_route
+
+
+def public_transport_relation_ids(root) -> set[str]:
+    """IDs of the route relations that are public transport services.
+
+    A relation without a ``route`` tag takes the value of the public transport
+    route master it belongs to; see ``is_public_transport_route``.
+    """
+    def tags_of(relation):
+        return {tag.get('k'): tag.get('v') for tag in relation.findall('./tag')}
+
+    master_values = {}
+    for relation in root.iter('relation'):
+        tags = tags_of(relation)
+        if tags.get('type') == 'route_master' and is_public_transport_route(tags.get('route_master')):
+            for member in relation.findall('./member'):
+                if member.get('type') == 'relation':
+                    master_values.setdefault(member.get('ref'), tags.get('route_master'))
+    return {
+        relation.get('id') for relation in root.iter('relation')
+        if (tags := tags_of(relation)).get('type') == 'route'
+        and is_public_transport_route(tags.get('route'), master_values.get(relation.get('id')))
+    }
+
+
 def process_osm_routes_data(xml_data, out_dir="data/processed/"):
     import datetime
     run_id = datetime.date.today().isoformat()
@@ -114,6 +140,7 @@ def process_osm_routes_data(xml_data, out_dir="data/processed/"):
             elif tid.endswith('.R'): return '1'
         return None
 
+    service_relation_ids = public_transport_relation_ids(root)
     route_master_rows = []
     route_master_tag_rows = []
     route_master_member_rows = []
@@ -122,7 +149,7 @@ def process_osm_routes_data(xml_data, out_dir="data/processed/"):
 
     for relation in root.findall(".//relation"):
         tags = _tags_for(relation)
-        if tags.get('type') != 'route_master':
+        if tags.get('type') != 'route_master' or not is_public_transport_route(tags.get('route_master')):
             continue
 
         route_master_id = relation.get('id')
@@ -151,7 +178,7 @@ def process_osm_routes_data(xml_data, out_dir="data/processed/"):
         sequence = 0
         seen_relation_ids = set()
         for member in relation.findall('./member'):
-            if member.get('type') != 'relation':
+            if member.get('type') != 'relation' or member.get('ref') not in service_relation_ids:
                 continue
             relation_id = member.get('ref')
             if relation_id in seen_relation_ids:
@@ -181,7 +208,7 @@ def process_osm_routes_data(xml_data, out_dir="data/processed/"):
 
     for relation in root.findall(".//relation"):
         tags = _tags_for(relation)
-        if tags.get('type') != 'route':
+        if tags.get('type') != 'route' or relation.get('id') not in service_relation_ids:
             continue
 
         relation_id = relation.get('id')

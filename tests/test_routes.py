@@ -1,6 +1,7 @@
 from osm_public_transport_matcher.routes import (
     _build_itinerary_rows,
     _count_stop_sequence_matches,
+    _one_call_per_stop_visit,
     _resolve_osm_stop_fields,
     _score_itinerary_pair,
 )
@@ -185,3 +186,31 @@ def test_stop_sequence_matches_equal_exhaustive_longest_common_subsequence():
             return best
 
         assert _count_stop_sequence_matches(a, b) == lcs(0, 0)
+
+
+def test_stop_position_and_platform_of_one_stop_make_one_call():
+    def member(sequence, role, key, station='8591122'):
+        return {'relation_id': '1', 'stop_sequence': sequence, 'osm_node_id': f'n{sequence}', 'stop_role': role,
+                'resolved_source_key': key, 'station_ref': station}
+
+    calls = _one_call_per_stop_visit([
+        member(0, 'stop', 'atlas:A'),
+        member(1, 'platform', 'atlas:A'),
+        member(2, 'stop_entry_only', None, '8591249'),
+        member(3, 'platform_entry_only', 'atlas:B', '8591249'),
+        member(4, 'platform', 'atlas:C', '8591250'),
+        member(5, 'platform', 'atlas:C', '8591250'),
+        member(6, 'stop', 'atlas:D', '8591338'),
+        member(7, 'platform', 'atlas:E', '8591338'),
+    ])
+
+    # The resolved member stands for its stop; repeated platforms and
+    # members resolved to different source stops stay separate calls.
+    assert [call['stop_sequence'] for call in calls] == [0, 3, 4, 5, 6, 7]
+
+    source_calls = [{'source_stop_key': key, 'station_ref': None} for key in ('atlas:A', 'atlas:B')]
+    osm_calls = [{'source_stop_key': call['resolved_source_key'], 'station_ref': call['station_ref']}
+                 for call in _one_call_per_stop_visit([member(0, 'stop', 'atlas:A'), member(1, 'platform', 'atlas:A'),
+                                                       member(2, 'stop', 'atlas:B', '1'), member(3, 'platform', 'atlas:B', '1')])]
+    score = _score_itinerary_pair({'direction_id': '0'}, {'direction_id': '0'}, source_calls, osm_calls)
+    assert score['stop_score'] == 1.0 and score['is_eligible']
