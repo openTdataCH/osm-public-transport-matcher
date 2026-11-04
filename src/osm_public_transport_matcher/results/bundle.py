@@ -179,7 +179,7 @@ def write_bundle(result, destination, *, metadata=None, compresslevel=1):
         try:
             engine_version = version("osm-public-transport-matcher")
         except PackageNotFoundError:  # running from a source checkout
-            from osm_public_transport_matcher import __version__ as engine_version
+            from osm_public_transport_matcher.version import __version__ as engine_version
         manifest = {
             "schema_version": SCHEMA_VERSION, "engine_version": engine_version,
             "run_id": str(uuid.uuid4()),

@@ -9,7 +9,7 @@ import time
 from typing import Any
 import xml.etree.ElementTree as ET
 
-from osm_public_transport_matcher import __version__
+from osm_public_transport_matcher.version import __version__
 from osm_public_transport_matcher.core.osm_tags import (
     LIFECYCLE_KEY_PATTERN,
     LIFECYCLE_VALUE_PATTERN,

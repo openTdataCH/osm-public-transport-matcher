@@ -90,7 +90,7 @@ A matching-algorithm change normally increments the package version but does not
 
 Release checklist:
 
-1. Update the version in `pyproject.toml` and `src/osm_public_transport_matcher/__init__.py`, and update the changelog.
+1. Update the version in `pyproject.toml` and `src/osm_public_transport_matcher/version.py`, and update the changelog.
 2. Run the full engine suite and the producer-to-consumer contract test.
 3. Commit the release, then create an annotated `v<package-version>` tag on that exact commit.
 4. Push the commit and tag. Never force-move an existing release tag.

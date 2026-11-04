@@ -57,7 +57,8 @@
           "src/osm_public_transport_matcher/routes.py",
           "src/osm_public_transport_matcher/statistics.py",
           "src/osm_public_transport_matcher/timing.py",
-          "src/osm_public_transport_matcher/progress.py"
+          "src/osm_public_transport_matcher/progress.py",
+          "src/osm_public_transport_matcher/version.py"
         ],
         "tests": [
           "tests/test_api.py",
