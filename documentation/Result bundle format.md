@@ -13,7 +13,7 @@ Two independent version numbers appear in every manifest:
 | Field | Example | Changes when |
 |---|---|---|
 | `schema_version` | `1` | The meaning or required shape of a field changes. Consumers reject versions they do not support. |
-| `engine_version` | `0.2.0` | The engine is released, including matching changes that keep the format. |
+| `engine_version` | `0.1.0` | The engine is released, including matching changes that keep the format. |
 
 Adding optional metadata is compatible: consumers ignore what they do not know. Any other change needs a new schema version and a coordinated consumer release. `tests/fixtures/result-v1` in the review application repository is the consumer compatibility fixture.
 
@@ -40,7 +40,7 @@ No Python pickle, ORM object, credential or path needed for reading crosses the 
 ```json
 {
   "schema_version": 1,
-  "engine_version": "0.2.0",
+  "engine_version": "0.1.0",
   "run_id": "a-unique-run-identifier",
   "generated_at": "2026-09-11T12:00:00+00:00",
   "profile_id": "generic",

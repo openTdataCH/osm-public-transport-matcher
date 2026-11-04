@@ -81,8 +81,8 @@ Four identifiers are deliberately separate:
 
 | Identifier | Example | Purpose |
 |---|---|---|
-| Package version | `0.2.0` | The engine release reported by Python package metadata and written as `engine_version` in result manifests. |
-| Git tag | `v0.2.0` | A human-readable, annotated Git/GitHub name for the release commit. A published tag is never moved or reused. |
+| Package version | `0.1.0` | The engine release reported by Python package metadata and written as `engine_version` in result manifests. |
+| Git tag | `v0.1.0` | A human-readable, annotated Git/GitHub name for the release commit. A published tag is never moved or reused. |
 | Commit SHA | `0123abcd...` | The immutable source identity. Deployments pin the full SHA, even when humans refer to the corresponding tag. |
 | Result schema version | `1` | The producer/consumer file contract. It changes only when the bundle format requires coordinated consumer support. |
 
@@ -97,10 +97,10 @@ Release checklist:
 5. Pin the tag's full commit SHA in each consumer (the review app's `engine.ref`) and rebuild its scheduler and documentation images.
 
 ```bash
-git tag -a v0.2.0 -m "OSM Public Transport Matcher 0.2.0"
+git tag -a v0.1.0 -m "OSM Public Transport Matcher 0.1.0"
 git push origin main
-git push origin v0.2.0
-git rev-list -n 1 v0.2.0
+git push origin v0.1.0
+git rev-list -n 1 v0.1.0
 ```
 
 The tag is the readable release name; the SHA is the deployment lock.
