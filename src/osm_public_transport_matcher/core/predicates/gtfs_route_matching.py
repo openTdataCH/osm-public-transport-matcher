@@ -1,7 +1,8 @@
 """
-Route-based matching predicate.
+GTFS route matching predicate.
 
-Matches source stops to OSM nodes by comparing GTFS route tokens.
+Matches source stops to OSM nodes that share a GTFS route (``gtfs_shared_route``)
+or, failing that, a GTFS direction name (``gtfs_shared_direction``).
 Route data is provided by SourceState (loaded from normalized GTFS route CSVs) and OsmState
 (derived from the OSM XML relation pass) — no file I/O happens here.
 """
@@ -70,7 +71,7 @@ def _commit_mutual_unique_edges(ctx: MatchingContext, edges: list[dict], score_n
     return matched_keys
 
 
-class RouteMatchPredicate(BasePredicate):
+class GtfsRoutePredicate(BasePredicate):
     """Match source stops to OSM nodes strictly by common transit routes/lines."""
 
     def run(self, ctx: MatchingContext) -> None:
@@ -118,8 +119,8 @@ class RouteMatchPredicate(BasePredicate):
                         'osm_node': node,
                         'distance_m': dist,
                         'score': len(token_overlap),
-                        'match_type': 'route_gtfs_tokens',
-                        'notes': 'gtfs_tokens',
+                        'match_type': 'gtfs_shared_route',
+                        'notes': 'Shared GTFS route',
                         'evidence': {'shared_route_tokens': sorted(token_overlap), 'score': len(token_overlap)},
                     })
                     continue
@@ -132,8 +133,8 @@ class RouteMatchPredicate(BasePredicate):
                         'osm_node': node,
                         'distance_m': dist,
                         'score': 1,
-                        'match_type': 'route_gtfs_direction',
-                        'notes': 'direction_name',
+                        'match_type': 'gtfs_shared_direction',
+                        'notes': 'Shared GTFS direction name',
                         'evidence': {'shared_direction_names': sorted(source_direction_names & set(name_dirs.get(str(node.node_id), set())))},
                     })
 

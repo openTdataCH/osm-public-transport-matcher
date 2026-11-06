@@ -1,11 +1,17 @@
-"""Exact matching through profile-approved, scoped identifier mappings."""
+"""Reference matching through profile-approved, scoped identifier mappings.
+
+Each commit names the branch that decided it, prefixed with the rule namespace:
+``<namespace>_reference_one_osm`` (one OSM element carries the value),
+``<namespace>_reference_one_source`` (one source stop carries a station value) and
+``<namespace>_reference_local_ref`` (platform code equals ``local_ref``).
+"""
 from collections import defaultdict
 
 from osm_public_transport_matcher.core.predicates import BasePredicate
 from osm_public_transport_matcher.core.utils.common import haversine_distance
 
 
-class ExactReferencePredicate(BasePredicate):
+class ReferencePredicate(BasePredicate):
     """Link stops through identifiers that a profile reference rule declares comparable."""
 
     def run(self, ctx):
@@ -29,7 +35,7 @@ class ExactReferencePredicate(BasePredicate):
                     continue
                 if rule.scope != 'station' and len(entries) > 1:
                     ctx.diagnostics.append({
-                        'code': 'ambiguous_exact_reference', 'stage': self.name,
+                        'code': 'ambiguous_reference', 'stage': self.name,
                         'source_keys': sorted(stop.key for stop, _ in entries),
                         'reference_namespace': rule.namespace, 'reference_value': value,
                         'reason': 'Multiple source stops declare the same stop-scoped identifier.',
@@ -38,25 +44,28 @@ class ExactReferencePredicate(BasePredicate):
                 # A station reference can link several platforms to one OSM station anchor.
                 if rule.scope == 'station' and len(candidates) == 1:
                     for stop, _ in entries:
-                        self._commit(ctx, stop, candidates[0], rule, value, 'Single OSM element for station reference')
+                        self._commit(ctx, stop, candidates[0], rule, value, 'one_osm',
+                                     'One OSM element carries the station reference')
                 elif rule.scope == 'station' and len(entries) == 1:
                     for osm in candidates:
-                        self._commit(ctx, entries[0][0], osm, rule, value, 'Single source stop matched to multiple OSM elements')
+                        self._commit(ctx, entries[0][0], osm, rule, value, 'one_source',
+                                     'One source stop carries the station reference')
                 else:
                     for stop, _ in entries:
                         available = [osm for osm in candidates if not ctx.osm.is_used(osm.node_id)]
                         if rule.scope != 'station' and len(available) == 1:
-                            chosen = available[0]
-                        else:
-                            compatible = [osm for osm in available if stop.platform_code and (osm.local_ref or '').strip().lower() == stop.platform_code.strip().lower()]
-                            chosen = compatible[0] if compatible and (rule.scope == 'station' or len(compatible) == 1) else None
-                        if chosen:
-                            self._commit(ctx, stop, chosen, rule, value, 'Exact compatible reference and platform code')
+                            self._commit(ctx, stop, available[0], rule, value, 'one_osm',
+                                         'One OSM element carries the reference')
+                            continue
+                        compatible = [osm for osm in available if stop.platform_code and (osm.local_ref or '').strip().lower() == stop.platform_code.strip().lower()]
+                        if compatible and (rule.scope == 'station' or len(compatible) == 1):
+                            self._commit(ctx, stop, compatible[0], rule, value, 'local_ref',
+                                         'Reference and platform code equal to local_ref')
 
     @staticmethod
-    def _commit(ctx, stop, osm, rule, value, notes):
+    def _commit(ctx, stop, osm, rule, value, branch, notes):
         before = len(ctx.all_matches)
-        ctx.commit(source_node=stop, osm_node=osm, match_type='exact',
+        ctx.commit(source_node=stop, osm_node=osm, match_type=f'{rule.namespace}_reference_{branch}',
                    distance_m=haversine_distance(stop.lat, stop.lon, osm.lat, osm.lon), notes=notes)
         ctx.all_matches[before].evidence.update({
             'reference': {'namespace': rule.namespace, 'value': value, 'scope': rule.scope},

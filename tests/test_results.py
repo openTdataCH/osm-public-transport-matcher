@@ -36,7 +36,7 @@ def test_roundtrip_preserves_semantic_output_typed_ids_and_quality(tmp_path):
     assert manifest == stored_manifest
     assert {row['key'] for row in rows['source_stops']} == {'demo:near', 'demo:far'}
     assert {row['key'] for row in rows['osm_nodes']} == {'osm:node:100', 'osm:way:100'}
-    assert [(row['source_key'], row['osm_key'], row['method']) for row in rows['matches']] == [('demo:near', 'osm:node:100', 'name')]
+    assert [(row['source_key'], row['osm_key'], row['method']) for row in rows['matches']] == [('demo:near', 'osm:node:100', 'name_one_osm')]
     assert {row['key'] for row in rows['unmatched']} == {'demo:far', 'osm:way:100'}
     assert {row['problem_id'] for row in rows['problems']} == {problem.problem_id for problem in result.problems}
     assert next(row['value'] for row in rows['extensions'] if row['kind'] == 'quality_metrics')['distance_quality']['overall']['count'] == 1

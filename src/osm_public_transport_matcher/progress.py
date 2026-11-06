@@ -75,14 +75,14 @@ ENGINE_PROGRESS_STAGES = (
     ),
     ProgressStage(
         "stop_matching.groups", "stop_matching", "stop_matching", "Build OSM stop groups",
-        "Identify supported OSM platform/stop-position pairs and trios.", 10,
+        "Identify supported OSM pairs and PTv2 two-sided stops.", 10,
     ),
     ProgressStage(
-        "stop_matching.trio", "stop_matching", "stop_matching", "Trio matching",
-        "Allocate the two platform sides of eligible OSM trios by total distance.", 20,
+        "stop_matching.two_sided_stop", "stop_matching", "stop_matching", "Two-sided stop matching",
+        "Allocate two source platforms to the two sides of each PTv2 two-sided stop by total distance.", 20,
     ),
     ProgressStage(
-        "stop_matching.exact", "stop_matching", "stop_matching", "Exact reference matching",
+        "stop_matching.reference", "stop_matching", "stop_matching", "Reference matching",
         "Match stops using profile-approved compatible identifiers.", 30,
     ),
     ProgressStage(
@@ -90,12 +90,12 @@ ENGINE_PROGRESS_STAGES = (
         "Match remaining stops by exact name, using platform references to break ties.", 40,
     ),
     ProgressStage(
-        "stop_matching.routes", "stop_matching", "stop_matching", "Route-based matching",
-        "Match remaining stops using shared route and direction evidence.", 50,
+        "stop_matching.gtfs_route", "stop_matching", "stop_matching", "GTFS route matching",
+        "Match remaining stops using shared GTFS route and direction evidence.", 50,
     ),
     ProgressStage(
-        "stop_matching.proximity", "stop_matching", "stop_matching", "Proximity matching",
-        "Run grouped, local-reference and nearest-distance allocation passes.", 60,
+        "stop_matching.distance", "stop_matching", "stop_matching", "Distance matching",
+        "Run group, local_ref and nearest-distance allocation passes.", 60,
     ),
     ProgressStage(
         "stop_matching.unmatched", "stop_matching", "stop_matching",

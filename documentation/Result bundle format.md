@@ -76,18 +76,18 @@ Rows refer to entities by key, never by position.
 
 ## Matches and unmatched entities
 
-- A match links two existing entities and has a finite, non-negative `distance_m` in metres. `method` is the [match type](https://github.com/openTdataCH/stop_sync_osm_atlas/blob/main/documentation/0.1%20Glossary.md#match-type).
+- A match links two existing entities and has a finite, non-negative `distance_m` in metres. `method` is the [match type](https://github.com/openTdataCH/stop_sync_osm_atlas/blob/main/documentation/0.1%20Glossary.md#match-type): the rule and branch that decided the match, such as `uic_reference_local_ref` or `gtfs_shared_route` ([E2](2.%20Matching%20process.md#the-matching-rules)).
 - An entity can have several matches when the profile allows it, but the same pair never appears twice.
 - Every entity appears either in `matches` or in `unmatched`, never in both and never in neither.
 - `isolated` is true when no element of the other side lies within the profile's isolation radius.
-- `effectively_matched` marks the middle of an OSM trio whose two sides are matched. It does not create a match for the middle.
+- `effectively_matched` marks the middle of a PTv2 two-sided stop whose two sides are matched. It does not create a match for the middle.
 - `disused` marks a [disused OSM element](1.3%20OSM%20data.md#disused-stops): one whose `osm_nodes` row has a `lifecycle`, the prefix of a retired stop tag such as `disused`. `lifecycle` is null for active elements. The disused rows are exactly the rows with a `lifecycle`, so such an element is never matched or effectively matched; the producer writes it with `isolated: false`. A missing `disused` counts as false, so earlier schema 1 bundles stay valid.
 
 ## Groups
 
 A **source duplicate group** has `side: "source"`, `kind: "duplicate"`, its representative `key`, and `members`: at least two distinct source keys of the same namespace. Groups never overlap.
 
-An **OSM stop unit** has `side: "osm"`, `stop_kind` (`single`, `pair` or `trio`), `group_kind` (the grouping branch, for example `osm_pair_uic`), `representative_node_id` and `members` of `{node_id, member_role}`. The roles are `single`; `pair_a` and `pair_b`; or `trio_middle` and two `trio_side`. Every OSM element belongs to exactly one stop unit; a disused element is always a `single` unit.
+An **OSM stop unit** has `side: "osm"`, `stop_kind` (`single`, `pair` or `two_sided_stop`), `group_kind` (the grouping branch, for example `ptv2_pair_uic_ref`), `representative_node_id` and `members` of `{node_id, member_role}`. The roles are `single`; `pair_a` and `pair_b`; or `middle` and two `side`. Every OSM element belongs to exactly one stop unit; a disused element is always a `single` unit.
 
 ## Problems
 

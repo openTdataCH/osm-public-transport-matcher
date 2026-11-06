@@ -56,8 +56,8 @@ class MatchingContext:
         to prevent subsequent iterations within the same predicate from double-booking nodes.
 
         Handles group expansion symmetrically for both source and OSM sides:
-        - source group siblings get ``duplicate_propagation`` records
-        - OSM group siblings get ``osm_group_propagation`` records
+        - source group siblings get ``source_duplicate_propagation`` records
+        - OSM group siblings get ``osm_pair_propagation`` records
         """
         # Keep original references for group expansion checks
         source_entry = source_node
@@ -82,7 +82,7 @@ class MatchingContext:
         if osm_node.node_id and osm_node.node_id != 'NA':
             self.osm.mark_used(osm_node.node_id)
 
-        # 3. source group expansion (duplicate_propagation)
+        # 3. source group expansion (source_duplicate_propagation)
         if hasattr(source_entry, 'is_group') and source_entry.is_group:
             for member in source_entry.get_members():
                 if member.key == source_node.key:
@@ -94,7 +94,7 @@ class MatchingContext:
                 sib_record = MatchRecord(
                     source_node=member,
                     osm_node=osm_node,
-                    match_type='duplicate_propagation',
+                    match_type='source_duplicate_propagation',
                     distance_m=sib_dist,
                     notes=f"Propagated from representative: {source_node.key}",
                     evidence={'representative_source_key': source_node.key},
@@ -102,12 +102,12 @@ class MatchingContext:
                 self.all_matches.append(sib_record)
                 self.source.add_matched_key(member.key)
 
-        # 4. OSM group expansion (osm_group_propagation)
+        # 4. OSM group expansion (osm_pair_propagation)
         if hasattr(osm_entry, 'is_group') and osm_entry.is_group:
-            # Trio groups are handled explicitly by TrioDistanceMatchingPredicate.
-            # Never auto-propagate trio siblings here, otherwise the middle node
+            # Two-sided stops are handled explicitly by TwoSidedStopPredicate.
+            # Never propagate to their siblings here, otherwise the middle node
             # would be incorrectly marked as matched.
-            if getattr(osm_entry, 'group_type', None) == 'osm_trio':
+            if getattr(osm_entry, 'group_type', None) == 'ptv2_two_sided_stop':
                 return
             for member in osm_entry.get_members():
                 if member.node_id == osm_node.node_id:
@@ -119,7 +119,7 @@ class MatchingContext:
                 osm_record = MatchRecord(
                     source_node=source_node,
                     osm_node=member,
-                    match_type='osm_group_propagation',
+                    match_type='osm_pair_propagation',
                     distance_m=osm_dist,
                     notes=f"OSM group partner of: {osm_node.node_id}",
                     evidence={'representative_osm_id': osm_node.node_id},

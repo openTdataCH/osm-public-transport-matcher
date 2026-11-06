@@ -30,7 +30,7 @@ class ReferenceRule:
 class GroupingPolicy:
     pair_distance: float = 12.0
     perfect_count_distance: float = 15.0
-    trio_middle_distance: float = 15.0
+    two_sided_middle_distance: float = 15.0
     nearby_source_distance: float = 30.0
     strict_ratio: float = 1.5
     relaxed_ratio: float = 2.0
@@ -50,9 +50,9 @@ class MatchingProfile:
     osm_grouping: bool = False
     grouping: GroupingPolicy = field(default_factory=GroupingPolicy)
     predicate_names: tuple[str, ...] = (
-        'trio', 'exact', 'name', 'route', 'group_proximity',
-        'long_distance_group_proximity', 'local_ref', 'nearest_single',
-        'nearest_ratio', 'nearest_second',
+        'two_sided_stop', 'reference', 'name', 'gtfs_route', 'group_distance',
+        'group_long_distance', 'local_ref_distance', 'distance_only_candidate',
+        'distance_ratio', 'distance_only_candidate_second_pass',
     )
     itinerary_min_stop_ratio: float = 0.8
     itinerary_require_direction: bool = False
@@ -70,6 +70,12 @@ class MatchingProfile:
             and any(ref.namespace == rule.namespace and ref.scope == rule.scope and ref.value == stop.station_ref for ref in stop.references)
             for rule in self.reference_rules
         )
+
+    @property
+    def station_reference_namespace(self):
+        """The namespace of the station-scoped rule for ``osm_station_ref_tag``, such as ``uic``."""
+        return next((rule.namespace for rule in self.reference_rules
+                     if rule.scope == 'station' and rule.osm_tag == self.osm_station_ref_tag), 'station')
 
     def station_references_compatible(self, stop, osm):
         members = osm.get_members() if hasattr(osm, 'get_members') else [osm]

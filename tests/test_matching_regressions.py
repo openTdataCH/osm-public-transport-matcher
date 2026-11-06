@@ -11,12 +11,12 @@ from osm_public_transport_matcher.core.predicates import BasePredicate
 from osm_public_transport_matcher.core.predicates.distance_matching import (
     NearestDistancePredicate,
     bipartite_match_max_cardinality,
-    GroupProximityPredicate,
+    GroupDistancePredicate,
 )
-from osm_public_transport_matcher.core.predicates.exact_matching import ExactReferencePredicate
-from osm_public_transport_matcher.core.predicates.name_matching import NameMatchPredicate
-from osm_public_transport_matcher.core.predicates.trio_distance_matching import TrioDistanceMatchingPredicate
-from osm_public_transport_matcher.core.predicates.route_matching_gtfs import RouteMatchPredicate
+from osm_public_transport_matcher.core.predicates.reference_matching import ReferencePredicate
+from osm_public_transport_matcher.core.predicates.name_matching import NamePredicate
+from osm_public_transport_matcher.core.predicates.two_sided_stop_matching import TwoSidedStopPredicate
+from osm_public_transport_matcher.core.predicates.gtfs_route_matching import GtfsRoutePredicate
 from osm_public_transport_matcher.api import _predicates
 from osm_public_transport_matcher.profiles import SWITZERLAND
 DEFAULT_PIPELINE = _predicates(SWITZERLAND)
@@ -146,7 +146,7 @@ class TestDefaultPipeline:
     def test_default_pipeline_runs_route_matching_before_distance_block(self):
         predicate_names = [predicate.name for predicate in DEFAULT_PIPELINE]
 
-        assert predicate_names.index('RouteMatchPredicate') < predicate_names.index('GroupProximityPredicate')
+        assert predicate_names.index('GtfsRoutePredicate') < predicate_names.index('GroupDistancePredicate')
 
 
 class TestBipartiteMatch:
@@ -202,16 +202,16 @@ class TestPipelineRunner:
 
 
 class TestCurrentPredicates:
-    def test_exact_uic_predicate_single_candidate(self):
+    def test_uic_reference_predicate_one_osm_candidate(self):
         ctx = _build_ctx(
             [_source_row('s1', '8503000', '1', 'Zürich HB', 47.3769, 8.5417)],
             [_osm_entry('osm_1', 47.3770, 8.5418, uic_ref='8503000', name='Zürich HB')],
         )
 
-        ExactReferencePredicate().run(ctx)
+        ReferencePredicate().run(ctx)
 
         assert [(record.source_node.source_id, record.osm_node.node_id, record.match_type) for record in ctx.all_matches] == [
-            ('s1', 'osm_1', 'exact')
+            ('s1', 'osm_1', 'uic_reference_one_osm')
         ]
         expected_dist = haversine_distance(47.3769, 8.5417, 47.3770, 8.5418)
         assert ctx.all_matches[0].distance_m == pytest.approx(expected_dist, abs=0.001)
@@ -225,11 +225,11 @@ class TestCurrentPredicates:
             ],
         )
 
-        NameMatchPredicate().run(ctx)
+        NamePredicate().run(ctx)
 
         assert len(ctx.all_matches) == 1
         assert ctx.all_matches[0].osm_node.node_id == 'osm_b'
-        assert ctx.all_matches[0].match_type == 'name'
+        assert ctx.all_matches[0].match_type == 'name_local_ref'
 
     def test_route_match_predicate_matches_by_gtfs_tokens(self):
         ctx = _build_ctx(
@@ -253,11 +253,11 @@ class TestCurrentPredicates:
             }
         }
 
-        RouteMatchPredicate().run(ctx)
+        GtfsRoutePredicate().run(ctx)
 
         assert len(ctx.all_matches) == 1
         assert ctx.all_matches[0].osm_node.node_id == 'osm_1'
-        assert ctx.all_matches[0].match_type == 'route_gtfs_tokens'
+        assert ctx.all_matches[0].match_type == 'gtfs_shared_route'
 
     def test_route_match_predicate_prefers_stronger_token_overlap(self):
         ctx = _build_ctx(
@@ -290,12 +290,12 @@ class TestCurrentPredicates:
             },
         )
 
-        RouteMatchPredicate().run(ctx)
+        GtfsRoutePredicate().run(ctx)
 
         assert len(ctx.all_matches) == 1
         assert ctx.all_matches[0].source_node.source_id == 's_strong'
         assert ctx.all_matches[0].osm_node.node_id == 'osm_1'
-        assert ctx.all_matches[0].match_type == 'route_gtfs_tokens'
+        assert ctx.all_matches[0].match_type == 'gtfs_shared_route'
 
     def test_route_match_predicate_skips_ambiguous_equal_token_matches(self):
         ctx = _build_ctx(
@@ -326,7 +326,7 @@ class TestCurrentPredicates:
             },
         )
 
-        RouteMatchPredicate().run(ctx)
+        GtfsRoutePredicate().run(ctx)
 
         assert ctx.all_matches == []
 
@@ -376,7 +376,7 @@ class TestCurrentPredicates:
         )
         run_pipeline(
             [
-                RouteMatchPredicate(),
+                GtfsRoutePredicate(),
                 NearestDistancePredicate(mode='single', pass_label='first'),
             ],
             ctx,
@@ -412,7 +412,7 @@ class TestCurrentPredicates:
         record = MatchRecord(
             source_node=_source_stop('s_bad', 46.5221688, 6.5661288, '', '', '', 'TL'),
             osm_node=OsmNode('osm_1', 46.5222435, 6.5661495, None, None, None, None, '', '', 'stop_position', None, None, None, {}),
-            match_type='distance_matching_3a',
+            match_type='distance_only_candidate',
             distance_m=8.0,
             notes='test',
         )
@@ -423,7 +423,7 @@ class TestCurrentPredicates:
         assert problems[0].problem_type == 'contradicts_route_matching'
         assert problems[0].priority == 2
 
-    def test_group_proximity_partial_matching_leaves_far_outlier_unmatched(self):
+    def test_group_distance_partial_matching_leaves_far_outlier_unmatched(self):
         ctx = _build_ctx(
             [
                 _source_row('s1', 'u1', '1', 'Hub', 47.0000000, 8.0000000),
@@ -436,12 +436,12 @@ class TestCurrentPredicates:
             ],
         )
 
-        GroupProximityPredicate().run(ctx)
+        GroupDistancePredicate().run(ctx)
 
         matched_sloids = {r.source_node.source_id for r in ctx.all_matches}
         assert matched_sloids == {'s1', 's2'}
-        assert ctx.all_matches[0].match_type.startswith('distance_matching_1_')
-        assert ctx.all_matches[1].match_type.startswith('distance_matching_1_')
+        assert ctx.all_matches[0].match_type.endswith('_group_distance')
+        assert ctx.all_matches[1].match_type.endswith('_group_distance')
         assert 's3' not in matched_sloids
 
 
@@ -466,8 +466,8 @@ class TestStaleCandidateRegression:
             'sib_b': 'rep_b',
         }
         ctx.osm._group_siblings = {
-            'rep_a': ('osm_pair_tram', [ctx.osm._to_osm_node(ctx.osm._all_nodes['sib_a'])]),
-            'rep_b': ('osm_pair_tram', [ctx.osm._to_osm_node(ctx.osm._all_nodes['sib_b'])]),
+            'rep_a': ('tram_stop_pair', [ctx.osm._to_osm_node(ctx.osm._all_nodes['sib_a'])]),
+            'rep_b': ('tram_stop_pair', [ctx.osm._to_osm_node(ctx.osm._all_nodes['sib_b'])]),
         }
 
         run_pipeline(
@@ -482,11 +482,11 @@ class TestStaleCandidateRegression:
         matched_pairs = [(record.source_node.source_id, record.osm_node.node_id, record.match_type) for record in ctx.all_matches]
 
         assert any(
-            sloid == 's2' and osm_node_id == 'rep_b' and match_type in {'distance_matching_3a', 'distance_matching_3b', 'distance_matching_3a_second_pass'}
+            sloid == 's2' and osm_node_id == 'rep_b' and match_type in {'distance_only_candidate', 'distance_ratio', 'distance_only_candidate_second_pass'}
             for sloid, osm_node_id, match_type in matched_pairs
         )
-        assert ('s3', 'rep_b', 'distance_matching_3a') not in matched_pairs
-        assert ('s3', 'rep_b', 'distance_matching_3a_second_pass') not in matched_pairs
+        assert ('s3', 'rep_b', 'distance_only_candidate') not in matched_pairs
+        assert ('s3', 'rep_b', 'distance_only_candidate_second_pass') not in matched_pairs
         assert 's3' not in {record.source_node.source_id for record in ctx.all_matches}
 
         assert haversine_distance(47.0003250, 8.0003250, 47.0002200, 8.0002200) < 50
@@ -514,7 +514,7 @@ class TestOsmGroupingPolicy:
 
         assert len(ctx.osm._group_representative) == 3
         assert all(
-            ctx.osm._group_siblings[rep_id][0] == 'osm_pair_uic_equal_15m'
+            ctx.osm._group_siblings[rep_id][0] == 'ptv2_pair_uic_ref_equal_count'
             for rep_id in ['platform_1', 'platform_2', 'platform_3']
             if rep_id in ctx.osm._group_siblings
         )
@@ -543,7 +543,7 @@ class TestOsmGroupingPolicy:
 
         assert len(ctx.osm._group_representative) == 2
         assert all(
-            entry[0] == 'osm_pair_uic_equal_15m'
+            entry[0] == 'ptv2_pair_uic_ref_equal_count'
             for entry in ctx.osm._group_siblings.values()
         )
 
@@ -568,7 +568,7 @@ class TestOsmGroupingPolicy:
 
         assert len(ctx.osm._group_representative) == 2
         assert all(
-            entry[0] == 'osm_pair_name_equal_15m'
+            entry[0] == 'ptv2_pair_name_equal_count'
             for entry in ctx.osm._group_siblings.values()
         )
 
@@ -590,7 +590,7 @@ class TestOsmGroupingPolicy:
 
         assert len(ctx.osm._group_representative) == 2
         assert all(
-            entry[0] == 'osm_pair_tram_equal_15m'
+            entry[0] == 'tram_stop_pair_equal_count'
             for entry in ctx.osm._group_siblings.values()
         )
 
@@ -607,7 +607,7 @@ class TestOsmGroupingPolicy:
         ctx.osm.build_groups(source_uic_counts={'u1': 3})
 
         assert ctx.osm._group_representative == {'stop_1': 'platform_1'}
-        assert ctx.osm._group_siblings['platform_1'][0] == 'osm_pair_uic'
+        assert ctx.osm._group_siblings['platform_1'][0] == 'ptv2_pair_uic_ref'
 
     def test_name_grouping_accepts_incomplete_relaxed_pairs(self):
         ctx = _build_ctx(
@@ -625,7 +625,7 @@ class TestOsmGroupingPolicy:
         )
 
         assert ctx.osm._group_representative == {'stop_name': 'platform_name'}
-        assert ctx.osm._group_siblings['platform_name'][0] == 'osm_pair_name'
+        assert ctx.osm._group_siblings['platform_name'][0] == 'ptv2_pair_name'
 
     def test_tram_grouping_accepts_incomplete_relaxed_pairs_without_outlier_logic(self):
         ctx = _build_ctx(
@@ -643,7 +643,7 @@ class TestOsmGroupingPolicy:
         )
 
         assert ctx.osm._group_representative == {'stop_tram_1': 'tram_1'}
-        assert ctx.osm._group_siblings['tram_1'][0] == 'osm_pair_tram'
+        assert ctx.osm._group_siblings['tram_1'][0] == 'tram_stop_pair'
 
     def test_grouped_lookup_inherits_uic_ref_from_sibling(self):
         ctx = _build_ctx(
@@ -701,14 +701,14 @@ class TestNearestDistanceMultiPass:
         by_sloid = {record.source_node.source_id: record for record in ctx.all_matches}
 
         assert by_sloid['s_competitor'].osm_node.node_id == 'way_208449401'
-        assert by_sloid['s_competitor'].match_type == 'distance_matching_3b'
+        assert by_sloid['s_competitor'].match_type == 'distance_ratio'
 
         assert by_sloid['s_target'].osm_node.node_id == 'way_208449383'
-        assert by_sloid['s_target'].match_type == 'distance_matching_3a_second_pass'
+        assert by_sloid['s_target'].match_type == 'distance_only_candidate_second_pass'
 
 
-class TestOsmTrioMatching:
-    def test_trio_commit_does_not_propagate_middle_node(self):
+class TestTwoSidedStopMatching:
+    def test_two_sided_stop_commit_does_not_propagate_middle_node(self):
         ctx = _build_ctx(
             [
                 _source_row('a1', 'u_trio', '1', 'Trio Stop', 47.3000000, 8.3000000),
@@ -725,13 +725,13 @@ class TestOsmTrioMatching:
         rep_entity = next(e for e in ctx.osm.get_by_uic('u_trio') if e.node_id == 'side_other' or e.node_id == 'side_rep')
         atlas_entry = next(e for e in ctx.source.get_unmatched_records() if e.source_id == 'a1')
 
-        ctx.commit(atlas_entry, rep_entity, 'exact', 0.0, 'test trio propagation guard')
+        ctx.commit(atlas_entry, rep_entity, 'uic_reference_one_osm', 0.0, 'test two-sided stop propagation guard')
 
-        osm_group_prop_records = [r for r in ctx.all_matches if r.match_type == 'osm_group_propagation']
+        osm_group_prop_records = [r for r in ctx.all_matches if r.match_type == 'osm_pair_propagation']
         assert osm_group_prop_records == []
         assert ctx.osm.is_used('middle') is False
 
-    def test_trio_stage_matches_two_side_nodes_and_leaves_middle_unmatched(self):
+    def test_two_sided_stop_stage_matches_two_side_nodes_and_leaves_middle_unmatched(self):
         ctx = _build_ctx(
             [
                 _source_row('a1', 'u_trio', '1', 'Trio Stop', 47.4000000, 8.4000000),
@@ -745,17 +745,17 @@ class TestOsmTrioMatching:
         )
         ctx.osm.build_groups(source_uic_counts={'u_trio': 2})
 
-        run_pipeline([TrioDistanceMatchingPredicate(), ExactReferencePredicate(), NameMatchPredicate()], ctx)
+        run_pipeline([TwoSidedStopPredicate(), ReferencePredicate(), NamePredicate()], ctx)
 
-        trio_records = [r for r in ctx.all_matches if r.match_type == 'distance_matching_trio']
-        matched_osm_ids = {r.osm_node.node_id for r in trio_records}
+        two_sided_records = [r for r in ctx.all_matches if r.match_type == 'uic_two_sided_stop']
+        matched_osm_ids = {r.osm_node.node_id for r in two_sided_records}
 
-        assert len(trio_records) == 2
+        assert len(two_sided_records) == 2
         assert matched_osm_ids == {'side_1', 'side_2'}
         assert ctx.osm.is_used('middle') is False
         assert 'middle' in {n.node_id for n in ctx.osm.get_unmatched_nodes()}
 
-    def test_non_local_trio_is_not_registered_and_can_fall_back_to_pair_grouping(self):
+    def test_non_local_two_sided_stop_is_not_registered_and_can_fall_back_to_pair_grouping(self):
         ctx = _build_ctx(
             [
                 _source_row('a1', 'u_trio', '1', 'Trio Stop', 47.5000000, 8.5000000),
@@ -770,7 +770,7 @@ class TestOsmTrioMatching:
 
         ctx.osm.build_groups(source_uic_counts={'u_trio': 2})
 
-        assert ctx.osm.get_trio_representatives() == []
+        assert ctx.osm.get_two_sided_stop_representatives() == []
         assert ctx.osm._group_representative == {'middle': 'side_near'}
-        assert ctx.osm._group_siblings['side_near'][0] == 'osm_pair_uic'
+        assert ctx.osm._group_siblings['side_near'][0] == 'ptv2_pair_uic_ref'
         assert {entity.node_id for entity in ctx.osm.get_by_uic('u_trio')} == {'side_near', 'side_far'}

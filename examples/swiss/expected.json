@@ -3,49 +3,49 @@
     [
       "ch:1:sloid:trio1",
       "6",
-      "distance_matching_trio",
+      "uic_two_sided_stop",
       0.0
     ],
     [
       "ch:1:sloid:trio2",
       "7",
-      "distance_matching_trio",
+      "uic_two_sided_stop",
       0.0
     ],
     [
       "ch:1:sloid:exact",
       "1",
-      "exact",
+      "uic_reference_one_osm",
       1.11195
     ],
     [
       "ch:1:sloid:duplicate1",
       "4",
-      "exact",
+      "uic_reference_one_osm",
       1.11195
     ],
     [
       "ch:1:sloid:duplicate2",
       "4",
-      "duplicate_propagation",
+      "source_duplicate_propagation",
       0.0
     ],
     [
       "ch:1:sloid:duplicate1",
       "5",
-      "osm_group_propagation",
+      "osm_pair_propagation",
       2.2239
     ],
     [
       "ch:1:sloid:name",
       "2",
-      "name",
+      "name_one_osm",
       1.11195
     ],
     [
       "ch:1:sloid:route",
       "3",
-      "route_gtfs_tokens",
+      "gtfs_shared_route",
       1.11195
     ]
   ],
@@ -58,27 +58,27 @@
   ],
   "groups": [
     {
-      "kind": "trio",
-      "group": "osm_trio",
+      "kind": "two_sided_stop",
+      "group": "ptv2_two_sided_stop",
       "rep": "6",
       "members": [
         [
           "8",
-          "trio_middle"
+          "middle"
         ],
         [
           "6",
-          "trio_side"
+          "side"
         ],
         [
           "7",
-          "trio_side"
+          "side"
         ]
       ]
     },
     {
       "kind": "pair",
-      "group": "osm_pair_uic",
+      "group": "ptv2_pair_uic_ref",
       "rep": "4",
       "members": [
         [

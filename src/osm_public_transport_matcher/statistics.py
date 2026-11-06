@@ -8,46 +8,8 @@ from typing import Any, Dict, List, Tuple
 logger = logging.getLogger(__name__)
 
 def _classify_match_type(match_type: str) -> str:
-    """Map a raw match_type string to a display stage name."""
-    if match_type == 'exact':
-        return 'exact'
-    if match_type == 'name':
-        return 'name'
-    if match_type == 'distance_matching_trio':
-        return 'distance_trio'
-    if match_type == 'distance_matching_1_uic_ref':
-        return 'distance_stage1_uic_ref'
-    if match_type == 'distance_matching_1_uic_name':
-        return 'distance_stage1_uic_name'
-    if match_type == 'distance_matching_1_name':
-        return 'distance_stage1_name'
-    if match_type.startswith('distance_matching_1_'):
-        return 'distance_stage1'
-    if match_type == 'long_distance_group_proximity_uic_ref':
-        return 'distance_stage1b_uic_ref'
-    if match_type == 'long_distance_group_proximity_uic_name':
-        return 'distance_stage1b_uic_name'
-    if match_type == 'long_distance_group_proximity_name':
-        return 'distance_stage1b_name'
-    if match_type.startswith('long_distance_group_proximity_'):
-        return 'distance_stage1b'
-    if match_type == 'distance_matching_2':
-        return 'distance_stage2'
-    if match_type == 'distance_matching_3a':
-        return 'distance_stage3a_pass1'
-    if match_type == 'distance_matching_3a_second_pass':
-        return 'distance_stage3a_pass2'
-    if match_type == 'distance_matching_3b':
-        return 'distance_stage3b'
-    if 'gtfs' in match_type:
-        return 'route_gtfs'
-    if match_type.startswith('route_'):
-        return 'route_gtfs'
-    if match_type == 'duplicate_propagation':
-        return 'post_duplicate_propagation'
-    if match_type == 'osm_group_propagation':
-        return 'post_osm_group_propagation'
-    return 'other'
+    """Quality metrics are reported per match type; each one names its rule and branch."""
+    return match_type or 'other'
 
 
 def _distance_stats(distances: List[float]) -> Dict[str, Any]:
@@ -210,7 +172,7 @@ def compute_quality_metrics(
         if osm_id:
             matched_osm_ids.add(str(osm_id))
 
-    grouped_units = [u for u in osm_stop_units if getattr(u, 'stop_kind', 'single') in ('pair', 'trio')]
+    grouped_units = [u for u in osm_stop_units if getattr(u, 'stop_kind', 'single') in ('pair', 'two_sided_stop')]
     total_groups = len(grouped_units)
     by_type: Dict[str, int] = defaultdict(int)
     both_matched = 0

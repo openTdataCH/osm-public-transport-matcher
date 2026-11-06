@@ -18,7 +18,7 @@ def test_non_swiss_fixture_has_complete_results_without_identifiers_or_routes():
     osm = [OsmNode(**row) for row in data['osm']]
     output = match(source, osm)
     assert {(row.source_node.source_id, row.osm_node.node_id, row.match_type) for row in output.matched} == {
-        ('central', '100', 'name'), ('riverside', '101', 'distance_matching_3a'),
+        ('central', '100', 'name_one_osm'), ('riverside', '101', 'distance_only_candidate'),
     }
     assert [row.key for row in output.unmatched_source] == ['berlin-demo:remote']
     assert [row.node_id for row in output.unmatched_osm] == ['102']
@@ -39,7 +39,7 @@ def test_exact_identifiers_require_compatible_namespace_and_scope():
         SourceStop('feed-a', 'parent', 52., 13., references=(Reference('feed-a', '1', 'station'),)),
     ]
     osm = [OsmNode('1', 52., 13., tags={'gtfs:stop_id': '1', 'gtfs:feed': 'a'})]
-    profile = MatchingProfile(predicate_names=('exact',), reference_rules=(
+    profile = MatchingProfile(predicate_names=('reference',), reference_rules=(
         ReferenceRule('feed-a', 'gtfs:stop_id', osm_scope_tag='gtfs:feed', osm_scope_value='a'),
     ))
     output = match(sources, osm, profile)
@@ -76,10 +76,10 @@ def test_route_namespace_collisions_do_not_create_matches():
     osm = OsmState.from_records([OsmNode('1', 52., 13.)], node_routes={
         '1': [{'gtfs_route_id': 'b:route:7', 'direction_id': '0'}],
     })
-    profile = MatchingProfile(predicate_names=('route',))
+    profile = MatchingProfile(predicate_names=('gtfs_route',))
     assert match(source, osm, profile).matched == []
     osm._node_routes['1'][0]['gtfs_route_id'] = 'a:route:7'
-    assert match(source, osm, profile).matched[0].match_type == 'route_gtfs_tokens'
+    assert match(source, osm, profile).matched[0].match_type == 'gtfs_shared_route'
 
 
 def swiss_stop(identifier, lon, code):
@@ -92,13 +92,13 @@ def test_swiss_station_reference_preserves_multiple_links_and_duplicate_propagat
     source = SourceState([a, b], {a.key: [a.key, b.key], b.key: [a.key, b.key]})
     output = match(source, [OsmNode('1', 47., 8., uic_ref='850001')], SWITZERLAND)
     assert {(row.source_node.key, row.osm_node.node_id, row.match_type) for row in output.matched} == {
-        ('atlas:a', '1', 'exact'), ('atlas:b', '1', 'duplicate_propagation'),
+        ('atlas:a', '1', 'uic_reference_one_osm'), ('atlas:b', '1', 'source_duplicate_propagation'),
     }
     assert output.unmatched_source == []
     assert output.duplicate_key_map == source.duplicate_key_map
 
 
-def test_trio_middle_is_effectively_matched_with_no_unmatched_problem():
+def test_two_sided_stop_middle_is_effectively_matched_with_no_unmatched_problem():
     source = [swiss_stop('a', 8., 'A'), swiss_stop('b', 8.0001, 'B')]
     osm = [
         OsmNode('1', 47., 8., uic_ref='850001', public_transport='platform'),
@@ -108,7 +108,7 @@ def test_trio_middle_is_effectively_matched_with_no_unmatched_problem():
     output = match(source, osm, SWITZERLAND)
     assert {row.osm_node.node_id for row in output.matched} == {'1', '2'}
     assert output.effectively_matched_osm_ids == ['3']
-    assert output.osm_stop_units[0].stop_kind == 'trio'
+    assert output.osm_stop_units[0].stop_kind == 'two_sided_stop'
     assert not [problem for problem in output.problems if problem.problem_type == 'unmatched']
 
 
@@ -121,7 +121,7 @@ def test_matched_distance_problem_is_calculated_before_any_app_import():
 
 
 def test_zero_distance_ratio_candidate_does_not_divide_by_zero():
-    profile = MatchingProfile(predicate_names=('nearest_ratio',))
+    profile = MatchingProfile(predicate_names=('distance_ratio',))
     output = match([SourceStop('demo', '1', 52., 13.)],
                    [OsmNode('1', 52., 13.), OsmNode('2', 52.0002, 13.)], profile)
     assert output.matched[0].osm_node.node_id == '1'
@@ -141,10 +141,10 @@ def test_duplicate_source_keys_fail_before_matching():
 
 def test_conflicting_stop_identifiers_are_diagnosed_without_arbitrary_exact_link():
     sources = [SourceStop('feed', key, 52., 13., references=(Reference('feed-stop', 'x'),)) for key in ['a', 'b']]
-    profile = MatchingProfile(predicate_names=('exact',), reference_rules=(ReferenceRule('feed-stop', 'gtfs:stop_id'),))
+    profile = MatchingProfile(predicate_names=('reference',), reference_rules=(ReferenceRule('feed-stop', 'gtfs:stop_id'),))
     output = match(sources, [OsmNode('1', 52., 13., tags={'gtfs:stop_id': 'x'})], profile)
     assert not output.matched
-    diagnostic = next(row for row in output.diagnostics if row['code'] == 'ambiguous_exact_reference')
+    diagnostic = next(row for row in output.diagnostics if row['code'] == 'ambiguous_reference')
     assert diagnostic['source_keys'] == ['feed:a', 'feed:b']
 
 
@@ -189,10 +189,10 @@ def test_quality_statistics_treat_co_located_elements_as_equally_close():
 def test_generic_name_problem_compares_osm_name_and_swiss_retains_uic_name_policy():
     source = [SourceStop('demo', '1', 52., 13., name='Expected')]
     osm = [OsmNode('1', 52., 13., name='Different', public_transport='platform')]
-    generic = match(source, osm, MatchingProfile(predicate_names=('nearest_single',)))
-    assert generic.matched[0].match_type == 'distance_matching_3a'
+    generic = match(source, osm, MatchingProfile(predicate_names=('distance_only_candidate',)))
+    assert generic.matched[0].match_type == 'distance_only_candidate'
     assert [problem.problem_type for problem in generic.problems] == ['attributes']
-    swiss = match(source, osm, replace(SWITZERLAND, predicate_names=('nearest_single',)))
+    swiss = match(source, osm, replace(SWITZERLAND, predicate_names=('distance_only_candidate',)))
     assert swiss.problems == []
 
 
@@ -200,7 +200,7 @@ def test_custom_station_reference_groups_without_rewriting_osm_tags():
     profile = MatchingProfile(
         osm_station_ref_tag='ref:station', station_reference_matching=True, osm_grouping=True,
         reference_rules=(ReferenceRule('local-station', 'ref:station', scope='station'),),
-        predicate_names=('exact',),
+        predicate_names=('reference',),
     )
     source = [SourceStop('agency', key, 47., lon, station_ref='X', platform_code=code,
                          references=(Reference('local-station', 'X', 'station'),))
@@ -217,9 +217,9 @@ def test_custom_station_reference_groups_without_rewriting_osm_tags():
     assert not [problem for problem in output.problems if problem.problem_type == 'attributes']
 
 
-def test_station_group_proximity_does_not_treat_equal_unscoped_values_as_evidence():
+def test_station_group_distance_does_not_treat_equal_unscoped_values_as_evidence():
     profile = MatchingProfile(
-        predicate_names=('group_proximity',), station_reference_matching=True,
+        predicate_names=('group_distance',), station_reference_matching=True,
         reference_rules=(ReferenceRule('uic', 'uic_ref', scope='station', source_namespace='agency-a',
                                       osm_scope_tag='network', osm_scope_value='A'),),
     )
@@ -241,7 +241,7 @@ def test_exact_reference_builds_osm_index_once_for_many_identifiers(monkeypatch)
     monkeypatch.setattr(OsmState, 'get_all_unmatched_grouped', counted)
     sources = [SourceStop('feed', str(i), 52., 13., references=(Reference('feed-stop', str(i)),)) for i in range(100)]
     osm = [OsmNode(str(i), 52., 13., tags={'gtfs:stop_id': str(i)}) for i in range(100)]
-    profile = MatchingProfile(predicate_names=('exact',), reference_rules=(ReferenceRule('feed-stop', 'gtfs:stop_id'),))
+    profile = MatchingProfile(predicate_names=('reference',), reference_rules=(ReferenceRule('feed-stop', 'gtfs:stop_id'),))
     output = match(sources, osm, profile)
     assert len(output.matched) == 100
     assert calls == ['gtfs:stop_id']
@@ -265,7 +265,7 @@ def test_swiss_name_matching_retains_repeated_alias_candidate_cardinality():
     osm = [OsmNode('1', 47., 8., tags={'name': 'Stop;Alias', 'uic_name': 'Stop;Alias'})]
     swiss = match(source, osm, replace(SWITZERLAND, predicate_names=('name',)))
     generic = match(source, osm, MatchingProfile(predicate_names=('name',)))
-    # Original Swiss parser presented two alias occurrences to NameMatchPredicate;
+    # Original Swiss parser presented two alias occurrences to NamePredicate;
     # with no platform code this remained ambiguous and passed to later rules.
     assert swiss.matched == []
     assert [row.osm_node.node_id for row in generic.matched] == ['1']
@@ -284,15 +284,15 @@ def test_swiss_name_pair_grouping_preserves_alias_occurrence_counts():
     assert [unit.stop_kind for unit in deduplicated.osm_stop_units] == ['pair']
 
 
-def test_group_proximity_retains_station_reference_evidence_from_osm_sibling():
+def test_group_distance_retains_station_reference_evidence_from_osm_sibling():
     source = [SourceStop('atlas', 'one', 47., 8., name='Station', station_ref='u1',
                          references=(Reference('uic', 'u1', 'station'),))]
     osm = [OsmNode('1', 47., 8., name='Station', public_transport='platform'),
            OsmNode('2', 47., 8.00001, name='Station', uic_ref='u1', public_transport='stop_position')]
-    result = match(source, osm, replace(SWITZERLAND, predicate_names=('group_proximity',)))
-    assert result.osm_stop_units[0].group_kind == 'osm_pair_name'
+    result = match(source, osm, replace(SWITZERLAND, predicate_names=('group_distance',)))
+    assert result.osm_stop_units[0].group_kind == 'ptv2_pair_name'
     assert [(row.osm_node.node_id, row.match_type) for row in result.matched] == [
-        ('1', 'distance_matching_1_uic_ref'), ('2', 'osm_group_propagation'),
+        ('1', 'uic_ref_group_distance'), ('2', 'osm_pair_propagation'),
     ]
 
 

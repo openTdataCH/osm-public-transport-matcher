@@ -50,12 +50,12 @@ def test_progress_plan_can_omit_inapplicable_work(capsys):
 
 def test_progress_stage_emits_started_finished_and_failure(capsys):
     with progress_reporting():
-        with progress_stage("stop_matching.exact"):
+        with progress_stage("stop_matching.reference"):
             pass
     success = _events(capsys.readouterr().out)
 
     assert [event["event"] for event in success] == ["stage_started", "stage_finished"]
-    assert all(event["stage_id"] == "stop_matching.exact" for event in success)
+    assert all(event["stage_id"] == "stop_matching.reference" for event in success)
     assert success[-1]["seconds"] >= 0
 
     with progress_reporting():
@@ -69,7 +69,7 @@ def test_progress_stage_emits_started_finished_and_failure(capsys):
 
 
 def test_library_progress_is_silent_unless_explicitly_enabled(capsys):
-    with progress_stage("stop_matching.exact"):
+    with progress_stage("stop_matching.reference"):
         pass
     assert capsys.readouterr().out == ""
 
@@ -114,7 +114,7 @@ def test_real_cli_plan_matches_executed_work(mode, tmp_path, capsys):
     assert ('atlas.load' in planned) == (mode != 'gtfs')
     validate_bundle(destination)
     # Calling main in-process must not enable reporting for later library calls.
-    with progress_stage('stop_matching.exact'):
+    with progress_stage('stop_matching.reference'):
         pass
     assert capsys.readouterr().out == ''
 
@@ -136,7 +136,7 @@ def test_reporting_rejects_nonadjacent_passes_before_matching():
     from osm_public_transport_matcher.core.pipeline import run_pipeline
     calls = []
     predicates = [SimpleNamespace(progress_stage_id=stage_id, run=lambda ctx: calls.append(ctx))
-                  for stage_id in ('stop_matching.proximity', 'stop_matching.name', 'stop_matching.proximity')]
+                  for stage_id in ('stop_matching.distance', 'stop_matching.name', 'stop_matching.distance')]
     with progress_reporting(), pytest.raises(ValueError, match='adjacent'):
         run_pipeline(predicates, None)
     assert not calls

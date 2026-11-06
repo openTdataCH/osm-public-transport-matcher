@@ -2,13 +2,14 @@
 Name-based matching predicate.
 
 Matches source ``name`` against OSM ``name`` / ``uic_name`` /
-``gtfs:name``, with an optional refinement by ``platform_code`` == ``local_ref``.
+``gtfs:name``. A single candidate commits ``name_one_osm``; among several, the
+one whose ``local_ref`` equals the platform code commits ``name_local_ref``.
 """
 from osm_public_transport_matcher.core.pipeline import MatchingContext
 from osm_public_transport_matcher.core.predicates import BasePredicate
 from osm_public_transport_matcher.core.utils.common import haversine_distance
 
-class NameMatchPredicate(BasePredicate):
+class NamePredicate(BasePredicate):
     """Match source name against OSM name index."""
 
     def run(self, ctx: MatchingContext) -> None:
@@ -22,9 +23,11 @@ class NameMatchPredicate(BasePredicate):
                 continue
 
             osm = None
+            match_type = 'name_one_osm'
             if len(candidates) == 1:
                 osm = candidates[0]
             else:
+                match_type = 'name_local_ref'
                 # Refine by platform_code == local_ref
                 desig = (entry.platform_code or '').strip().lower()
                 if desig:
@@ -43,7 +46,7 @@ class NameMatchPredicate(BasePredicate):
                 ctx.commit(
                     source_node=entry,
                     osm_node=osm,
-                    match_type='name',
+                    match_type=match_type,
                     distance_m=dist,
                     notes=f"Name index match ({len(candidates)} candidates)",
                     evidence={'source_name': name, 'candidate_count': len(candidates), 'platform_code': entry.platform_code},

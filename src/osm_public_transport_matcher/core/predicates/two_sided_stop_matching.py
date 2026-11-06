@@ -1,9 +1,14 @@
 """
-Trio-first distance matching.
+Two-sided stop matching.
 
-Runs before other distance predicates. For each detected OSM trio, match the two
-non-middle side nodes to the closest unmatched source nodes sharing the same UIC.
-The middle node (stop_position) is intentionally left unmatched.
+A PTv2 two-sided stop is one ``public_transport=stop_position`` with an element on
+each side, all three carrying the same station reference. For each one, match the
+two sides to the two unmatched source stops with that reference, choosing the
+assignment with the smaller total distance. The middle stop_position stays
+unmatched and counts as matched once both sides are.
+
+The rule runs before reference matching: that rule sees the grouped stop as one
+element and would link both source stops to its representative.
 """
 from __future__ import annotations
 
@@ -12,13 +17,14 @@ from osm_public_transport_matcher.core.predicates import BasePredicate
 from osm_public_transport_matcher.core.utils.common import haversine_distance
 
 
-class TrioDistanceMatchingPredicate(BasePredicate):
-    """Pair two trio side nodes with the two closest unmatched source nodes for the same UIC."""
+class TwoSidedStopPredicate(BasePredicate):
+    """Assign two source stops to the two sides of each two-sided stop with their station reference."""
 
     def run(self, ctx: MatchingContext) -> None:
-        trio_reps = ctx.osm.get_trio_representatives()
-        if not trio_reps:
+        two_sided_reps = ctx.osm.get_two_sided_stop_representatives()
+        if not two_sided_reps:
             return
+        match_type = f'{ctx.profile.station_reference_namespace}_two_sided_stop'
 
         unmatched_source = ctx.source.get_unmatched_records()
         source_by_uic: dict[str, list] = {}
@@ -30,12 +36,12 @@ class TrioDistanceMatchingPredicate(BasePredicate):
                 continue
             source_by_uic.setdefault(uic, []).append(entry)
 
-        for rep_id in trio_reps:
-            trio = ctx.osm.get_trio_for_representative(rep_id)
-            if trio is None:
+        for rep_id in two_sided_reps:
+            stop = ctx.osm.get_two_sided_stop_for_representative(rep_id)
+            if stop is None:
                 continue
 
-            middle_node_id, side_node_id_1, side_node_id_2 = trio
+            middle_node_id, side_node_id_1, side_node_id_2 = stop
             side_nodes = []
             for node_id in (side_node_id_1, side_node_id_2):
                 node_entity = ctx.osm.get_by_node_id(node_id)
@@ -89,7 +95,7 @@ class TrioDistanceMatchingPredicate(BasePredicate):
                 ctx.commit(
                     source_node=source_entry,
                     osm_node=side_node,
-                    match_type='distance_matching_trio',
+                    match_type=match_type,
                     distance_m=dist,
-                    notes=f"Trio side matched (middle node {middle_node_id})",
+                    notes=f"Two-sided stop side matched (middle node {middle_node_id})",
                 )

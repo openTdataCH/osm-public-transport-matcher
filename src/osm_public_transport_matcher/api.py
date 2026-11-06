@@ -5,14 +5,14 @@ from hashlib import sha256
 import json
 
 from .core.models import MatchingOutput, OsmStopUnitRecord, OsmStopMemberRecord, DetectedProblem
-from .core.state import SourceState, OsmState
+from .core.state import SourceState, OsmState, PAIR_GROUP_KINDS
 from .core.pipeline import MatchingContext, run_pipeline
 from .core.route_state import RouteState
-from .core.predicates.exact_matching import ExactReferencePredicate
-from .core.predicates.name_matching import NameMatchPredicate
-from .core.predicates.trio_distance_matching import TrioDistanceMatchingPredicate
-from .core.predicates.distance_matching import GroupProximityPredicate, LocalRefDistancePredicate, NearestDistancePredicate
-from .core.predicates.route_matching_gtfs import RouteMatchPredicate
+from .core.predicates.reference_matching import ReferencePredicate
+from .core.predicates.name_matching import NamePredicate
+from .core.predicates.two_sided_stop_matching import TwoSidedStopPredicate
+from .core.predicates.distance_matching import GroupDistancePredicate, LocalRefDistancePredicate, NearestDistancePredicate
+from .core.predicates.gtfs_route_matching import GtfsRoutePredicate
 from .core.problem_detection.context import ProblemContext
 from .core.problem_detection.pipeline import STOP_PROBLEM_PIPELINE
 from .core.problem_detection.stop_predicates.disused import conflicting_source_stops, disused_problem
@@ -23,36 +23,36 @@ from .progress import progress_stage
 
 def _predicates(profile):
     factories = {
-        'trio': TrioDistanceMatchingPredicate,
-        'exact': ExactReferencePredicate,
-        'name': NameMatchPredicate,
-        'route': RouteMatchPredicate,
-        'group_proximity': GroupProximityPredicate,
-        'long_distance_group_proximity': lambda: GroupProximityPredicate(
+        'two_sided_stop': TwoSidedStopPredicate,
+        'reference': ReferencePredicate,
+        'name': NamePredicate,
+        'gtfs_route': GtfsRoutePredicate,
+        'group_distance': GroupDistancePredicate,
+        'group_long_distance': lambda: GroupDistancePredicate(
             max_distance=profile.long_distance,
-            match_type_prefix='long_distance_group_proximity',
-            notes_label='Conflict-free max-cardinality long-distance group proximity match',
-            name='LongDistanceGroupProximityPredicate',
+            match_type_suffix='group_long_distance',
+            notes_label='Conflict-free max-cardinality long-distance group assignment',
+            name='GroupLongDistancePredicate',
         ),
-        'local_ref': LocalRefDistancePredicate,
-        'nearest_single': lambda: NearestDistancePredicate(mode='single', pass_label='first'),
-        'nearest_ratio': lambda: NearestDistancePredicate(mode='ratio', pass_label='first'),
-        'nearest_second': lambda: NearestDistancePredicate(mode='single', pass_label='second'),
+        'local_ref_distance': LocalRefDistancePredicate,
+        'distance_only_candidate': lambda: NearestDistancePredicate(mode='single', pass_label='first'),
+        'distance_ratio': lambda: NearestDistancePredicate(mode='ratio', pass_label='first'),
+        'distance_only_candidate_second_pass': lambda: NearestDistancePredicate(mode='single', pass_label='second'),
     }
     unknown = set(profile.predicate_names) - factories.keys()
     if unknown:
         raise ValueError(f'Unknown predicates: {sorted(unknown)}')
     progress_stages = {
-        'trio': 'stop_matching.trio',
-        'exact': 'stop_matching.exact',
+        'two_sided_stop': 'stop_matching.two_sided_stop',
+        'reference': 'stop_matching.reference',
         'name': 'stop_matching.name',
-        'route': 'stop_matching.routes',
-        'group_proximity': 'stop_matching.proximity',
-        'long_distance_group_proximity': 'stop_matching.proximity',
-        'local_ref': 'stop_matching.proximity',
-        'nearest_single': 'stop_matching.proximity',
-        'nearest_ratio': 'stop_matching.proximity',
-        'nearest_second': 'stop_matching.proximity',
+        'gtfs_route': 'stop_matching.gtfs_route',
+        'group_distance': 'stop_matching.distance',
+        'group_long_distance': 'stop_matching.distance',
+        'local_ref_distance': 'stop_matching.distance',
+        'distance_only_candidate': 'stop_matching.distance',
+        'distance_ratio': 'stop_matching.distance',
+        'distance_only_candidate_second_pass': 'stop_matching.distance',
     }
     predicates = []
     for name in profile.predicate_names:
@@ -96,13 +96,13 @@ def _build_groups(source, osm, profile):
 def _stop_units(osm):
     units, grouped = [], set()
     for representative, (kind, siblings) in osm._group_siblings.items():
-        if kind.startswith('osm_pair_') and siblings:
+        if kind == 'ptv2_two_sided_stop':
+            middle, first, second = osm.get_two_sided_stop_for_representative(representative)
+            members = [OsmStopMemberRecord(middle, 'middle'), OsmStopMemberRecord(first, 'side'), OsmStopMemberRecord(second, 'side')]
+            stop_kind = 'two_sided_stop'
+        elif kind in PAIR_GROUP_KINDS and siblings:
             members = [OsmStopMemberRecord(representative, 'pair_a'), OsmStopMemberRecord(siblings[0].node_id, 'pair_b')]
             stop_kind = 'pair'
-        elif kind == 'osm_trio':
-            middle, first, second = osm.get_trio_for_representative(representative)
-            members = [OsmStopMemberRecord(middle, 'trio_middle'), OsmStopMemberRecord(first, 'trio_side'), OsmStopMemberRecord(second, 'trio_side')]
-            stop_kind = 'trio'
         else:
             continue
         units.append(OsmStopUnitRecord(stop_kind, kind, representative, members))
@@ -130,10 +130,10 @@ def _detect(output, profile, route_state):
     output.duplicate_osm_group_map = ctx.duplicate_osm_group_map
     matched_osm = {record.osm_node.node_id for record in output.matched}
     for unit in output.osm_stop_units:
-        if unit.stop_kind == 'trio':
-            sides = [m.node_id for m in unit.members if m.member_role == 'trio_side']
+        if unit.stop_kind == 'two_sided_stop':
+            sides = [m.node_id for m in unit.members if m.member_role == 'side']
             if len(sides) == 2 and all(node_id in matched_osm for node_id in sides):
-                output.effectively_matched_osm_ids.extend(m.node_id for m in unit.members if m.member_role == 'trio_middle')
+                output.effectively_matched_osm_ids.extend(m.node_id for m in unit.members if m.member_role == 'middle')
     problems = {}
     for record in output.matched:
         record.evaluate_matched_problems(ctx, STOP_PROBLEM_PIPELINE)

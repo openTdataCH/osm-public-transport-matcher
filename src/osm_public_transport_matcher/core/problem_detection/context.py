@@ -88,7 +88,7 @@ class ProblemContext:
     duplicate_key_map: dict = field(default_factory=dict)       # {key: [group]}
     duplicate_osm_group_map: dict = field(default_factory=dict)   # {node_id: [group]}
     duplicate_osm_node_ids: set = field(default_factory=set)      # set of node_ids
-    handled_duplicate_keys: set = field(default_factory=set)    # source keys already handled by duplicate_propagation
+    handled_duplicate_keys: set = field(default_factory=set)    # source keys already handled by source_duplicate_propagation
 
     @classmethod
     def build(cls, output: 'MatchingOutput') -> "ProblemContext":
@@ -122,9 +122,9 @@ class ProblemContext:
         # -- OSM duplicate groups (excludes pre-grouped nodes) ----------------
         ctx._build_osm_duplicate_map(matched, unmatched_osm, grouped_osm_node_ids)
 
-        # -- Track source keys handled by duplicate_propagation --------------
+        # -- Track source keys handled by source_duplicate_propagation --------------
         for rec in matched:
-            if rec.match_type == 'duplicate_propagation':
+            if rec.match_type == 'source_duplicate_propagation':
                 ctx.handled_duplicate_keys.add(str(rec.source_node.key))
 
         return ctx

@@ -3,9 +3,9 @@ Distance-based matching predicates.
 
 Three predicates, each progressively looser:
 
-* **group_proximity** – conflict-free bipartite matching within UIC / name groups
-* **local_ref_distance** – exact ``local_ref`` match within *max_distance*
-* **nearest_distance** – single-candidate or ratio-test proximity match
+* **GroupDistancePredicate** – conflict-free bipartite matching within UIC / name groups
+* **LocalRefDistancePredicate** – exact ``local_ref`` match within *max_distance*
+* **NearestDistancePredicate** – only-candidate or ratio-test proximity match
 """
 import numpy as np
 from collections import defaultdict
@@ -87,22 +87,22 @@ def bipartite_match_max_cardinality(
 
 
 # ---------------------------------------------------------------------------
-# Predicate 1 – group proximity
+# Predicate 1 – group distance
 # ---------------------------------------------------------------------------
 
-class GroupProximityPredicate(BasePredicate):
+class GroupDistancePredicate(BasePredicate):
     """Conflict-free maximum-cardinality proximity matching within UIC / name groups."""
 
     def __init__(
         self,
         max_distance: float | None = None,
-        match_type_prefix: str = 'distance_matching_1',
-        notes_label: str = 'Conflict-free max-cardinality proximity match',
-        name: str = 'GroupProximityPredicate',
+        match_type_suffix: str = 'group_distance',
+        notes_label: str = 'Conflict-free max-cardinality group assignment',
+        name: str = 'GroupDistancePredicate',
     ):
         super().__init__(name=name)
         self.max_distance = max_distance
-        self.match_type_prefix = match_type_prefix
+        self.match_type_suffix = match_type_suffix
         self.notes_label = notes_label
 
     def run(self, ctx: MatchingContext) -> None:
@@ -158,7 +158,7 @@ class GroupProximityPredicate(BasePredicate):
                     ctx.commit(
                         source_node=entry,
                         osm_node=osm,
-                        match_type=f'{self.match_type_prefix}_{osm_key}',
+                        match_type=f'{osm_key}_{self.match_type_suffix}',
                         distance_m=dist,
                         notes=f"{self.notes_label} ({osm_key})",
                     )
@@ -205,7 +205,7 @@ class LocalRefDistancePredicate(BasePredicate):
                 ctx.commit(
                     source_node=entry,
                     osm_node=best_node,
-                    match_type='distance_matching_2',
+                    match_type='local_ref_distance',
                     distance_m=best_dist,
                     notes="Exact local_ref match within max_distance",
                 )
@@ -216,7 +216,7 @@ class LocalRefDistancePredicate(BasePredicate):
 # ---------------------------------------------------------------------------
 
 class NearestDistancePredicate(BasePredicate):
-    """Single-candidate or ratio-test nearest matching within *max_distance*."""
+    """Only-candidate or ratio-test nearest matching within *max_distance*."""
 
     def __init__(self, mode: str = 'single', pass_label: str = 'first'):
         if mode not in {'single', 'ratio'}:
@@ -254,14 +254,14 @@ class NearestDistancePredicate(BasePredicate):
 
             candidates.sort(key=lambda x: x[1])
 
-            # Case A: single candidate
+            # Case A: only candidate
             if self.mode == 'single' and len(candidates) == 1:
                 node, d = candidates[0]
-                match_type = 'distance_matching_3a'
-                notes = 'Single candidate within max_distance'
+                match_type = 'distance_only_candidate'
+                notes = 'Only candidate within max_distance'
                 if self.pass_label == 'second':
-                    match_type = 'distance_matching_3a_second_pass'
-                    notes = 'Single candidate within max_distance (second pass)'
+                    match_type = 'distance_only_candidate_second_pass'
+                    notes = 'Only candidate within max_distance (second pass)'
 
                 ctx.commit(
                     source_node=entry,
@@ -280,7 +280,7 @@ class NearestDistancePredicate(BasePredicate):
                     ctx.commit(
                         source_node=entry,
                         osm_node=node,
-                        match_type='distance_matching_3b',
+                        match_type='distance_ratio',
                         distance_m=d1,
                         notes=f"Ratio test: d1={d1:.1f}m, d2={d2:.1f}m, ratio={(d2 / d1 if d1 else float('inf')):.1f}",
                     )

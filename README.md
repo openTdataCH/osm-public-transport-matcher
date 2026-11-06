@@ -138,7 +138,7 @@ The image includes all supported adapter extras. Local inputs are mounted read-o
 
 ## Profiles and matching behavior
 
-Use `MatchingProfile` for a dataset or agency. The default profile runs name, route and distance rules. It enables exact matching only for explicitly configured reference mappings; station grouping is disabled by default. The Swiss profile enables UIC station-reference allocation and the OSM pair/trio rules. `osm_station_ref_tag` selects an agency's station-reference tag without rewriting OSM tags; its corresponding station-scoped `ReferenceRule` must explicitly permit comparison. Generic name checks use OSM `name`, falling back to `uic_name`; the Swiss profile uses `uic_name`.
+Use `MatchingProfile` for a dataset or agency. The default profile runs name, GTFS route and distance rules. It enables reference matching only for explicitly configured reference mappings; station grouping is disabled by default. The Swiss profile enables UIC station-reference allocation, OSM pairs and PTv2 two-sided stops. `osm_station_ref_tag` selects an agency's station-reference tag without rewriting OSM tags; its corresponding station-scoped `ReferenceRule` must explicitly permit comparison. Generic name checks use OSM `name`, falling back to `uic_name`; the Swiss profile uses `uic_name`.
 
 ```python
 from osm_public_transport_matcher.core.models import Reference, SourceStop
@@ -161,7 +161,7 @@ stop = SourceStop(
 
 Matching bare equal IDs across feeds is unsafe. A reference rule states the identifier namespace, stop/station scope and compatible OSM tag. Optional OSM scope tags restrict agency/feed-specific identifiers. Feed route identifiers must be scoped by the adapter too; Swiss year-code normalization lives in the Swiss profile.
 
-The engine deliberately supports multiple links for station references and group propagation. It does not impose a universal one-to-one relationship. A trio's middle stop position remains without a direct link when its two sides match; the result marks it effectively matched and does not create an unmatched problem for it.
+The engine deliberately supports multiple links for station references and group propagation. It does not impose a universal one-to-one relationship. The middle stop position of a two-sided stop remains without a direct link when its two sides match; the result marks it effectively matched and does not create an unmatched problem for it.
 
 The core API returns stop results and route evidence. The dataset runners additionally compare complete route/itinerary records and attach adapter metadata before writing the bundle. An adapter without route inputs remains useful for stop matching.
 

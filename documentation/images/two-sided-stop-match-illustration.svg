@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 400" width="100%" height="400" role="img" aria-labelledby="title desc">
-  <title id="title">OSM trio matched to two ATLAS stops</title>
-  <desc id="desc">Schematic showing an OSM trio with two side nodes matched to two ATLAS stops using solid blue lines, and the middle stop_position connected to both sides using dashed green lines.</desc>
+  <title id="title">PTv2 two-sided stop matched to two ATLAS stops</title>
+  <desc id="desc">Schematic showing a PTv2 two-sided stop with two side nodes matched to two ATLAS stops using solid blue lines, and the middle stop_position connected to both sides using dashed green lines.</desc>
   <style>
     .bg { fill: #f7f8fb; }
     .rail { stroke: #d9dde5; stroke-width: 28; stroke-linecap: round; }
@@ -20,8 +20,8 @@
 
   <rect x="0" y="0" width="860" height="400" rx="20" class="bg"/>
 
-  <text x="430" y="54" text-anchor="middle" class="title">OSM trio: 2 ATLAS matches + 1 effectively matched middle</text>
-  <text x="430" y="88" text-anchor="middle" class="caption">Solid blue lines are ATLAS-OSM matches. Dashed green lines are OSM-OSM trio links shown on the map.</text>
+  <text x="430" y="54" text-anchor="middle" class="title">Two-sided stop: 2 ATLAS matches + 1 effectively matched middle</text>
+  <text x="430" y="88" text-anchor="middle" class="caption">Solid blue lines are ATLAS-OSM matches. Dashed green lines link the members of the stop on the map.</text>
 
   <line x1="190" y1="170" x2="690" y2="250" class="rail"/>
 
@@ -53,7 +53,7 @@
   <line x1="96" y1="359" x2="144" y2="359" class="blue-line"/>
   <text x="156" y="364" class="legend">ATLAS-OSM matched edge</text>
   <line x1="348" y1="359" x2="396" y2="359" class="green-line"/>
-  <text x="408" y="364" class="legend">OSM trio link</text>
+  <text x="408" y="364" class="legend">Two-sided stop link</text>
   <circle cx="566" cy="359" r="10" class="osm-middle"/>
   <text x="584" y="364" class="legend">Middle node effectively matched</text>
 </svg>

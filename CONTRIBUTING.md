@@ -60,20 +60,22 @@ baseline is not an automatic part of a green build.
 1. Add a small failing example using `SourceStop` and `OsmNode` in `tests/`. Assert expected identity pairs, not only total counts. Include the ambiguous or negative case that could create a false positive.
 2. Edit or add a class in `src/osm_public_transport_matcher/core/predicates/`. Subclass `BasePredicate` and implement `run(ctx)`. Read candidates from `ctx.source` and `ctx.osm` and record accepted links with `ctx.commit(...)`.
 3. For a new public stage, register its factory in `api._predicates` and add its identifier to the desired profile's `predicate_names`. Record its inputs, assumptions and ordering below or in the module docstring.
-4. Run the affected regression and the core suite. Preserve group propagation and candidate locks. Build reusable attribute indexes once per rule. Batch queries can contain candidates consumed by an earlier iteration; filter those candidates before committing. The 100-reference regression prevents repeated full OSM scans during exact matching.
+4. Run the affected regression and the core suite. Preserve group propagation and candidate locks. Build reusable attribute indexes once per rule. Batch queries can contain candidates consumed by an earlier iteration; filter those candidates before committing. The 100-reference regression prevents repeated full OSM scans during reference matching.
 
-`ctx.commit` expands source duplicates and OSM pairs. Trio sides have their own predicate; never propagate a direct match to a trio middle. Exact station references intentionally support one-to-many and many-to-one links. Changing these allocation rules requires explicit regression cases.
+`ctx.commit` expands source duplicates and OSM pairs. The sides of a two-sided stop have their own predicate; never propagate a direct match to its middle. Station references intentionally support one-to-many and many-to-one links. Changing these allocation rules requires explicit regression cases.
+
+Name a stage and its match types after the evidence they use, and give each branch that decides differently its own match type, so a match type tells a reviewer how a pair was found.
 
 | Stage identifier | Inputs and assumptions | Default position |
 |---|---|---|
-| `trio` | Profile-approved station references; two source stops, two OSM sides and one nearby middle. | First, before exact matching. |
-| `exact` | A profile rule with compatible reference namespace, scope and OSM tag. Platform codes refine station candidates. | Before weaker evidence. |
-| `name` | Exact source name against OSM name/UIC-name/GTFS-name; platform code can disambiguate. | Before route/distance. |
-| `route` | Scoped route IDs and direction IDs, or direction labels; mutual unique best candidate. | Before distance. |
-| `group_proximity` | Name or approved station groups; maximum-cardinality assignment under the distance cap. | First distance stage. |
-| `long_distance_group_proximity` | Same evidence under the profile's longer cap. | After normal group proximity. |
-| `local_ref` | Equal platform/local reference within the normal distance cap. | Before nearest-only rules. |
-| `nearest_single`, `nearest_ratio`, `nearest_second` | Spatial candidates and compatible platform codes; single candidate or sufficient separation from the second candidate. | Last, in that order. |
+| `two_sided_stop` | Profile-approved station references; two source stops, the two sides and the middle of a PTv2 two-sided stop. | First, before reference matching, which would see the stop as one element. |
+| `reference` | A profile rule with compatible reference namespace, scope and OSM tag. Platform codes refine station candidates. | Before weaker evidence. |
+| `name` | Exact source name against OSM name/UIC-name/GTFS-name; platform code can disambiguate. | Before GTFS route/distance. |
+| `gtfs_route` | Scoped GTFS route IDs and direction IDs, or direction labels; mutual unique best candidate. | Before distance. |
+| `group_distance` | Name or approved station groups; maximum-cardinality assignment under the distance cap. | First distance stage. |
+| `group_long_distance` | Same evidence under the profile's longer cap. | After `group_distance`. |
+| `local_ref_distance` | Equal platform code and `local_ref` within the normal distance cap. | Before nearest-only rules. |
+| `distance_only_candidate`, `distance_ratio`, `distance_only_candidate_second_pass` | Spatial candidates and compatible platform codes; only candidate or sufficient separation from the second candidate. | Last, in that order. |
 
 Name equality alone can be ambiguous across cities. The generic profile caps name matching at 1 km; the Swiss profile does not cap it. Route labels are weaker evidence than scoped route IDs. Profile options make such tradeoffs visible.
 
