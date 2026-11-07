@@ -68,7 +68,8 @@ Name a stage and its match types after the evidence they use, and give each bran
 
 | Stage identifier | Inputs and assumptions | Default position |
 |---|---|---|
-| `two_sided_stop` | Profile-approved station references; two source stops, the two sides and the middle of a PTv2 two-sided stop. | First, before reference matching, which would see the stop as one element. |
+| `identifier` | A profile `IdentifierRule`: OSM tags, such as `ref:sloid`, whose value equals one source stop's reference; within the long-distance cap. Elements kept only for their identifier are linked after all stages. | First, so that no weaker evidence gives a tagged element to another stop. Later stages skip their station-level shortcuts where it linked part of a station. |
+| `two_sided_stop` | Profile-approved station references; two source stops, the two sides and the middle of a PTv2 two-sided stop. | Before reference matching, which would see the stop as one element. |
 | `reference` | A profile rule with compatible reference namespace, scope and OSM tag. Platform codes refine station candidates. | Before weaker evidence. |
 | `name` | Exact source name against OSM name/UIC-name/GTFS-name; platform code can disambiguate. | Before GTFS route/distance. |
 | `gtfs_route` | Scoped GTFS route IDs and direction IDs, or direction labels; mutual unique best candidate. Where a candidate carries the stop's platform code, candidates labelled with another platform are left out. | Before distance. |

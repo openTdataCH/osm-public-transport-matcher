@@ -63,6 +63,7 @@
         "tests": [
           "tests/test_api.py",
           "tests/test_matching_regressions.py",
+          "tests/test_identifiers.py",
           "tests/test_routes.py",
           "tests/test_route_assignment_scale.py",
           "tests/test_progress.py",

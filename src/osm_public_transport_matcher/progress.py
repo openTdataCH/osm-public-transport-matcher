@@ -78,6 +78,10 @@ ENGINE_PROGRESS_STAGES = (
         "Identify supported OSM pairs and PTv2 two-sided stops.", 10,
     ),
     ProgressStage(
+        "stop_matching.identifier", "stop_matching", "stop_matching", "Identifier matching",
+        "Link OSM elements to the platforms their identifier tags name, such as ref:sloid.", 15,
+    ),
+    ProgressStage(
         "stop_matching.two_sided_stop", "stop_matching", "stop_matching", "Two-sided stop matching",
         "Allocate two source platforms to the two sides of each PTv2 two-sided stop by total distance.", 20,
     ),
@@ -104,7 +108,7 @@ ENGINE_PROGRESS_STAGES = (
     ),
     ProgressStage(
         "stop_matching.problems", "stop_matching", "stop_matching", "Detect data problems",
-        "Detect distance, attribute, route-contradiction, unmatched and duplicate problems.", 80,
+        "Detect distance, attribute, route-contradiction, unmatched, duplicate and identifier problems.", 80,
     ),
     ProgressStage(
         "route_matching.normalize", "route_matching", "route_matching", "Normalize route data",

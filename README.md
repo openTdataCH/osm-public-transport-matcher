@@ -138,7 +138,7 @@ The image includes all supported adapter extras. Local inputs are mounted read-o
 
 ## Profiles and matching behavior
 
-Use `MatchingProfile` for a dataset or agency. The default profile runs name, GTFS route and distance rules. It enables reference matching only for explicitly configured reference mappings; station grouping is disabled by default. The Swiss profile enables UIC station-reference allocation, OSM pairs and PTv2 two-sided stops. `osm_station_ref_tag` selects an agency's station-reference tag without rewriting OSM tags; its corresponding station-scoped `ReferenceRule` must explicitly permit comparison. Generic name checks use OSM `name`, falling back to `uic_name`; the Swiss profile uses `uic_name`.
+Use `MatchingProfile` for a dataset or agency. The default profile runs name, GTFS route and distance rules. It enables reference matching only for explicitly configured reference mappings; station grouping is disabled by default. The Swiss profile first links OSM elements that name their ATLAS platform with `ref:sloid` (an `IdentifierRule`), then enables UIC station-reference allocation, OSM pairs and PTv2 two-sided stops. `osm_station_ref_tag` selects an agency's station-reference tag without rewriting OSM tags; its corresponding station-scoped `ReferenceRule` must explicitly permit comparison. Generic name checks use OSM `name`, falling back to `uic_name`; the Swiss profile uses `uic_name`.
 
 ```python
 from osm_public_transport_matcher.core.models import Reference, SourceStop

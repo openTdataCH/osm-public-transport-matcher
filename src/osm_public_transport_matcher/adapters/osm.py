@@ -6,18 +6,22 @@ from collections import defaultdict
 from pathlib import Path
 from osm_public_transport_matcher.core.models import OsmNode
 from osm_public_transport_matcher.adapters.osm_routes import public_transport_relation_ids
-from osm_public_transport_matcher.core.osm_tags import lifecycle_of
+from osm_public_transport_matcher.core.osm_tags import STOP_IDENTIFIER_KEYS, lifecycle_of
 from osm_public_transport_matcher.core.state import OsmState
 
 logger = logging.getLogger(__name__)
 
 
-def read_osm(xml_file: str | Path, *, route_namespace: str | None = None, route_id_normalizer=None) -> OsmState:
+def read_osm(xml_file: str | Path, *, route_namespace: str | None = None, route_id_normalizer=None,
+             identifier_keys: tuple[str, ...] = STOP_IDENTIFIER_KEYS) -> OsmState:
     """Read nodes and supported station ways, retaining ordered relation evidence.
 
     Nodes and ways keep distinct identities even when coordinates coincide.
     Ways currently use Overpass centers or the mean of available member nodes;
     relation geometries are outside the supported stop geometry contract.
+    Another way with one of ``identifier_keys`` (a platform with ``ref:sloid``)
+    is kept ``identifier_only``: only its identifier can link it, and it adds
+    nothing to the name, station-reference or direction evidence.
     """
     tree = ET.parse(xml_file)
     root = tree.getroot()
@@ -102,7 +106,9 @@ def read_osm(xml_file: str | Path, *, route_namespace: str | None = None, route_
         )
         way_uic_ref = tags.get("uic_ref")
         is_uic_without_node = bool(way_uic_ref) and way_uic_ref not in node_uic_refs
-        if not (is_aerialway_station or is_uic_without_node):
+        identifier_only = not (is_aerialway_station or is_uic_without_node) and any(
+            tags.get(key) for key in identifier_keys)
+        if not (is_aerialway_station or is_uic_without_node or identifier_only):
             continue
 
         center = way.find("center")
@@ -129,10 +135,13 @@ def read_osm(xml_file: str | Path, *, route_namespace: str | None = None, route_
             'lon': lon,
             'local_ref': local_ref,
             'tags': tags,
+            'identifier_only': identifier_only,
         }
 
         all_nodes[str(entry['node_id'])] = entry
         selected_way_count += 1
+        if identifier_only:
+            continue
 
         if way_uic_ref:
             uic_ref_dict[way_uic_ref].append(entry)
@@ -255,6 +264,7 @@ def _osm_node(entry: dict) -> OsmNode:
         railway=_str(tags.get('railway')),
         amenity=_str(tags.get('amenity')),
         aerialway=_str(tags.get('aerialway')),
-        tags=tags
+        tags=tags,
+        identifier_only=bool(entry.get('identifier_only', False)),
     )
 

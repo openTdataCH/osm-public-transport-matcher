@@ -24,7 +24,7 @@ Every section is a UTF-8 JSON Lines file compressed with gzip, named `<section>.
 | Section | One row per | Principal fields |
 |---|---|---|
 | `source_stops` | source stop | `key`, `namespace`, `source_id`, `lat`, `lon`, `name`, `platform_code`, `station_ref`, `operator`, `operator_id`, `operator_name`, `references`, `parent_id`, `stop_kind`, `extensions` |
-| `osm_nodes` | positioned OSM element | `key`, `node_id`, `element_type`, `lat`, `lon`, `tags`, the projected tags `name`, `local_ref`, `uic_ref`, `uic_name`, `public_transport`, `railway`, `amenity`, `aerialway`, `network`, `operator`, `lifecycle`, and optionally `station_reference` |
+| `osm_nodes` | positioned OSM element | `key`, `node_id`, `element_type`, `lat`, `lon`, `tags`, the projected tags `name`, `local_ref`, `uic_ref`, `uic_name`, `public_transport`, `railway`, `amenity`, `aerialway`, `network`, `operator`, `lifecycle`, and optionally `station_reference` and `identifier_only` |
 | `matches` | link between a source stop and an OSM element | `source_key`, `osm_key`, `method`, `distance_m`, `notes`, `evidence`, `problems` |
 | `unmatched` | entity without any match | `side` (`source` or `osm`), `key`, `isolated`; OSM rows also `effectively_matched` and `disused` |
 | `groups` | source duplicate group or OSM stop unit | see [Groups](#groups) |
@@ -92,6 +92,8 @@ An **OSM stop unit** has `side: "osm"`, `stop_kind` (`single`, `pair` or `two_si
 ## Problems
 
 Each problem has a stable `problem_id`, derived from its type and the sorted keys of the entities it affects; its `evidence` can change between runs without changing that identity. A future review workflow can compare evidence to decide whether an earlier review still applies.
+
+An `identifier` problem lists one OSM element in `osm_ids` and no `source_keys`, whether the element is matched or not; its evidence names the values that matching could not use ([E4.1](4.1%20Stop%20Problems.md#identifier-problems)). An element with `identifier_only: true` was kept only for its identifier tags ([E1.3](1.3%20OSM%20data.md#stop-identifiers)). It appears when its identifier links it, or when it has an `identifier` problem, and then also an `unmatched` one. Its links get no other problems. A missing `identifier_only` counts as false.
 
 Each match row repeats the problems of that pair (type, priority and duplicate flags) in its `problems` field; the same problems appear in the `problems` section with their keys and evidence. Every unmatched source stop, and every unmatched OSM element that is neither effectively matched nor disused, has an `unmatched` problem; the other OSM elements have none. A `disused` problem lists only disused elements in `osm_ids` and no `source_keys`; its evidence holds `lifecycle` and `conflicting_source_keys` ([E4.1](4.1%20Stop%20Problems.md#disused-problems)).
 

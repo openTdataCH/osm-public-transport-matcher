@@ -7,12 +7,16 @@ one whose ``local_ref`` equals the platform code commits ``name_local_ref``.
 """
 from osm_public_transport_matcher.core.pipeline import MatchingContext
 from osm_public_transport_matcher.core.predicates import BasePredicate
+from osm_public_transport_matcher.core.predicates.identifier_matching import identified_stations
 from osm_public_transport_matcher.core.utils.common import haversine_distance
 
 class NamePredicate(BasePredicate):
     """Match source name against OSM name index."""
 
     def run(self, ctx: MatchingContext) -> None:
+        # At a station where an identifier linked some elements, the one element
+        # left with a name is not the stop by elimination: only local_ref decides.
+        identified = identified_stations(ctx)
         for entry in ctx.source.get_unmatched_records():
             name = (entry.name or '').strip()
             if not name:
@@ -24,7 +28,7 @@ class NamePredicate(BasePredicate):
 
             osm = None
             match_type = 'name_one_osm'
-            if len(candidates) == 1:
+            if len(candidates) == 1 and entry.station_ref not in identified:
                 osm = candidates[0]
             else:
                 match_type = 'name_local_ref'

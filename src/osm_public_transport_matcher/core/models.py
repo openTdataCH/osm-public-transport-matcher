@@ -72,6 +72,9 @@ class OsmNode:
     station_reference: str | None = None
     # Lifecycle prefix of a retired stop tag, such as 'disused'; derived from tags.
     lifecycle: str | None = None
+    # Kept only for its stop identifier tags, such as a platform way with
+    # ref:sloid: linked by that identifier and by no other rule.
+    identifier_only: bool = False
 
     def __post_init__(self):
         if not self.node_id:

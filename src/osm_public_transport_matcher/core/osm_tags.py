@@ -21,6 +21,12 @@ STOP_TAG_SELECTORS = (
     ('aerialway', '=', 'station'),
 )
 
+# Keys whose value names the exact platform an element belongs to, such as
+# ref:sloid=ch:1:sloid:7000:4:7. Platform ways are not stops for the matching
+# rules, but a way with one of these keys is downloaded and kept so that its
+# identifier can link it (see adapters/osm.py and IdentifierRule).
+STOP_IDENTIFIER_KEYS = ('ref:sloid', 'railway:ref:sloid')
+
 # OSM lifecycle prefixes for something that is no longer in service, such as
 # disused:highway=bus_stop. Prefixes for future features (construction:,
 # proposed:) are not included.

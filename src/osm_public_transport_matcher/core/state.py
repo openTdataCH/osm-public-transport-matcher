@@ -94,7 +94,7 @@ class OsmState:
                 value = getattr(node, key)
                 if value is not None and value != '':
                     tags.setdefault(key, value)
-            entry = {'node_id': node.node_id, 'lat': node.lat, 'lon': node.lon, 'local_ref': node.local_ref or tags.get('local_ref') or tags.get('ref'), 'tags': tags, 'element_type': node.element_type, 'station_ref': tags.get(station_ref_tag, '')}
+            entry = {'node_id': node.node_id, 'lat': node.lat, 'lon': node.lon, 'local_ref': node.local_ref or tags.get('local_ref') or tags.get('ref'), 'tags': tags, 'element_type': node.element_type, 'station_ref': tags.get(station_ref_tag, ''), 'identifier_only': node.identifier_only}
             records[node.node_id] = entry
             if entry['station_ref']:
                 uic_index[entry['station_ref']].append(entry)
@@ -134,7 +134,8 @@ class OsmState:
             aerialway=_str(tags.get('aerialway')),
             tags=tags,
             element_type=entry.get('element_type', 'node'),
-            station_reference=_str(entry.get('station_ref')), 
+            station_reference=_str(entry.get('station_ref')),
+            identifier_only=bool(entry.get('identifier_only', False)),
         )
 
     def __init__(self, nodes: dict, uic_ref_dict: dict, name_index: dict,
@@ -826,6 +827,16 @@ class OsmState:
     def _is_sibling(self, node_id: str) -> bool:
         """Returns True if this node is a sibling (hidden from predicates)."""
         return node_id in self._group_representative
+
+    def pair_partner(self, node_id: str) -> OsmNode | None:
+        """The other member of the PTv2 pair that contains ``node_id``, if it is in one."""
+        representative = self._group_representative.get(node_id, node_id)
+        group = self._group_siblings.get(representative)
+        if group is None or group[0] not in PAIR_GROUP_KINDS or not group[1]:
+            return None
+        if representative != node_id:
+            return self._to_osm_node(self._all_nodes[representative])
+        return group[1][0]
 
     def mark_used(self, node_id: str):
         self.used_ids.add(node_id)

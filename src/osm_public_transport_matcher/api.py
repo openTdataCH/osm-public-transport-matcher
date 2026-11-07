@@ -4,10 +4,12 @@ from dataclasses import asdict
 from hashlib import sha256
 import json
 
-from .core.models import MatchingOutput, OsmStopUnitRecord, OsmStopMemberRecord, DetectedProblem
+from .core.identifiers import IdentifierIndex
+from .core.models import MatchingOutput, MatchRecord, OsmStopUnitRecord, OsmStopMemberRecord, DetectedProblem
 from .core.state import SourceState, OsmState, PAIR_GROUP_KINDS
 from .core.pipeline import MatchingContext, run_pipeline
 from .core.route_state import RouteState
+from .core.predicates.identifier_matching import NOTES as IDENTIFIER_NOTES, IdentifierPredicate
 from .core.predicates.reference_matching import ReferencePredicate
 from .core.predicates.name_matching import NamePredicate
 from .core.predicates.two_sided_stop_matching import TwoSidedStopPredicate
@@ -15,7 +17,9 @@ from .core.predicates.distance_matching import GroupDistancePredicate, LocalRefD
 from .core.predicates.gtfs_route_matching import GtfsRoutePredicate
 from .core.problem_detection.context import ProblemContext
 from .core.problem_detection.pipeline import STOP_PROBLEM_PIPELINE
+from .core.problem_detection.result import ProblemResult
 from .core.problem_detection.stop_predicates.disused import conflicting_source_stops, disused_problem
+from .core.problem_detection.stop_predicates.unmatched import unmatched_problem
 from .core.utils.common import haversine_distance
 from .core.profile import MatchingProfile
 from .progress import progress_stage
@@ -23,6 +27,7 @@ from .progress import progress_stage
 
 def _predicates(profile):
     factories = {
+        'identifier': IdentifierPredicate,
         'two_sided_stop': TwoSidedStopPredicate,
         'reference': ReferencePredicate,
         'name': NamePredicate,
@@ -43,6 +48,7 @@ def _predicates(profile):
     if unknown:
         raise ValueError(f'Unknown predicates: {sorted(unknown)}')
     progress_stages = {
+        'identifier': 'stop_matching.identifier',
         'two_sided_stop': 'stop_matching.two_sided_stop',
         'reference': 'stop_matching.reference',
         'name': 'stop_matching.name',
@@ -123,7 +129,48 @@ def _problem(problem, source_keys=(), osm_ids=(), evidence=None):
     )
 
 
-def _detect(output, profile, route_state):
+def _link_identifier_only(nodes, source_stops, profile):
+    """Link the elements kept only for their identifier tags, such as platform ways.
+
+    They take part in no rule, so a link never takes a source stop away from
+    another element. Returns the links and the elements left unlinked.
+    """
+    indexes = [IdentifierIndex(rule, source_stops) for rule in profile.identifier_rules]
+    links, unlinked = [], []
+    for node in nodes:
+        found = []
+        for index in indexes if not node.is_station else ():
+            reading = index.read(node, profile.long_distance)
+            match_type = f'{index.rule.namespace}_identifier'
+            found.extend(MatchRecord(
+                stop, node, match_type, distance, IDENTIFIER_NOTES,
+                evidence={'rule': match_type, 'distance_m': distance,
+                          'identifier': {'namespace': index.rule.namespace, 'value': value}},
+            ) for stop, value, distance in (reading.stops if reading else ()))
+        links.extend(found)
+        if not found:
+            unlinked.append(node)
+    return links, unlinked
+
+
+def _identifier_problems(profile, source_stops, nodes):
+    """One problem per element whose identifier names a far stop, no stop, or is malformed."""
+    for rule in profile.identifier_rules:
+        index = IdentifierIndex(rule, source_stops)
+        for node in nodes:
+            reading = index.read(node, profile.long_distance)
+            if reading is not None and reading.priority is not None:
+                yield _problem(ProblemResult('identifier', reading.priority), osm_ids=[node.node_id],
+                               evidence=reading.evidence(rule))
+
+
+def _detect(output, profile, route_state, identifier_links=(), identifier_unlinked=()):
+    """Detect problems, then add the elements kept only for their identifier.
+
+    Those elements stay out of the problem context and the stop problems: their
+    links come from their own tags. An unlinked one is kept only when its
+    identifier is reported, and is then an unmatched element like any other.
+    """
     ctx = ProblemContext.build(output)
     ctx.profile = profile
     ctx.route_state = route_state
@@ -163,6 +210,26 @@ def _detect(output, profile, route_state):
             conflicts = sorted(stop.key for stop in conflicting_source_stops(ctx, node))
             p = _problem(result, osm_ids=[node.node_id], evidence={'lifecycle': node.lifecycle, 'conflicting_source_keys': conflicts})
             problems[p.problem_id] = p
+    linked = list({record.osm_node.node_id: record.osm_node for record in identifier_links}.values())
+    reported = set()
+    for p in _identifier_problems(profile, output.all_source_nodes,
+                                  [*output.all_osm_nodes, *linked, *identifier_unlinked]):
+        problems[p.problem_id] = p
+        reported.update(p.osm_ids)
+    kept = [node for node in identifier_unlinked if node.node_id in reported]
+    for node in kept:
+        nearest = ctx.nearest_source_distance(node.lat, node.lon)
+        if nearest is None or nearest > profile.isolation_radius:
+            output.isolated_osm_ids.append(node.node_id)
+        for result in unmatched_problem(ctx, node):
+            p = _problem(result, osm_ids=[node.node_id], evidence={'nearest_source_distance_m': nearest})
+            problems[p.problem_id] = p
+    output.matched.extend(identifier_links)
+    output.unmatched_osm.extend(kept)
+    output.all_osm_nodes.extend([*linked, *kept])
+    output.osm_stop_units.extend(
+        OsmStopUnitRecord('single', None, node.node_id, [OsmStopMemberRecord(node.node_id, 'single')])
+        for node in [*linked, *kept])
     output.problems = sorted(problems.values(), key=lambda p: (p.priority, p.problem_type, p.problem_id))
 
 
@@ -188,10 +255,18 @@ def match(source, osm, profile=None, route_evidence=None):
         nodes, node_routes, name_dirs, uic_dirs = list(osm), route_evidence.get('osm'), None, None
     # A lifecycle-prefixed stop tag (disused:highway=bus_stop) says the element
     # is out of service: it never takes part in matching and is reported apart.
-    disused_osm = OsmState.from_records([node for node in nodes if node.lifecycle],
+    # Elements kept only for their identifier tags take part in no rule either.
+    disused_osm = OsmState.from_records([node for node in nodes if node.lifecycle and not node.identifier_only],
                                         station_ref_tag=profile.osm_station_ref_tag).get_all_nodes()
-    osm = OsmState.from_records([node for node in nodes if not node.lifecycle], node_routes=node_routes,
-                                name_dirs=name_dirs, uic_dirs=uic_dirs, station_ref_tag=profile.osm_station_ref_tag,
+    identifier_only = [node for node in nodes if node.identifier_only and not node.lifecycle]
+    apart = {node.node_id for node in nodes if node.identifier_only}
+    if apart:
+        node_routes, name_dirs, uic_dirs = (
+            {key: value for key, value in evidence.items() if key not in apart} if evidence else evidence
+            for evidence in (node_routes, name_dirs, uic_dirs))
+    osm = OsmState.from_records([node for node in nodes if not node.lifecycle and not node.identifier_only],
+                                node_routes=node_routes, name_dirs=name_dirs, uic_dirs=uic_dirs,
+                                station_ref_tag=profile.osm_station_ref_tag,
                                 preserve_name_alias_multiplicity=profile.preserve_name_alias_multiplicity)
     route_state = route_evidence.get('route_state') or RouteState()
     with progress_stage('stop_matching.groups'):
@@ -213,8 +288,9 @@ def match(source, osm, profile=None, route_evidence=None):
     if not (has_source_routes and has_osm_routes):
         output.diagnostics.append({'code': 'route_evidence_unavailable', 'stage': 'route_matching',
                                    'reason': 'Source or OSM route evidence is absent; route-dependent checks skipped.'})
+    identifier_links, identifier_unlinked = _link_identifier_only(identifier_only, output.all_source_nodes, profile)
     with progress_stage('stop_matching.problems'):
-        _detect(output, profile, route_state)
+        _detect(output, profile, route_state, identifier_links, identifier_unlinked)
     output.metadata = {
         'profile': asdict(profile),
         'capabilities': [cap for cap in profile.capabilities if cap != 'routes' or (has_source_routes and has_osm_routes)],

@@ -8,6 +8,7 @@ Each commit names the branch that decided it, prefixed with the rule namespace:
 from collections import defaultdict
 
 from osm_public_transport_matcher.core.predicates import BasePredicate
+from osm_public_transport_matcher.core.predicates.identifier_matching import identified_stations
 from osm_public_transport_matcher.core.utils.common import haversine_distance
 
 
@@ -15,6 +16,10 @@ class ReferencePredicate(BasePredicate):
     """Link stops through identifiers that a profile reference rule declares comparable."""
 
     def run(self, ctx):
+        # Where an identifier already linked part of a station, its other elements
+        # and stops are no longer the whole station: only platform codes may link
+        # them here, not the station-level shortcuts.
+        identified = identified_stations(ctx)
         for rule in ctx.profile.reference_rules:
             candidates_by_value = ctx.osm.get_all_unmatched_grouped(rule.osm_tag)
             groups = defaultdict(list)
@@ -42,11 +47,11 @@ class ReferencePredicate(BasePredicate):
                     })
                     continue
                 # A station reference can link several platforms to one OSM station anchor.
-                if rule.scope == 'station' and len(candidates) == 1:
+                if rule.scope == 'station' and len(candidates) == 1 and value not in identified:
                     for stop, _ in entries:
                         self._commit(ctx, stop, candidates[0], rule, value, 'one_osm',
                                      'One OSM element carries the station reference')
-                elif rule.scope == 'station' and len(entries) == 1:
+                elif rule.scope == 'station' and len(entries) == 1 and value not in identified:
                     for osm in candidates:
                         self._commit(ctx, entries[0][0], osm, rule, value, 'one_source',
                                      'One source stop carries the station reference')

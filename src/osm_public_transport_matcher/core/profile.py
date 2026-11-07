@@ -1,5 +1,39 @@
 """Source-neutral matching policy values; no dataset or I/O dependencies."""
 from dataclasses import dataclass, field
+import re
+
+
+@dataclass(frozen=True)
+class IdentifierRule:
+    """OSM tags with which an element names the exact source stop it belongs to.
+
+    A value equals the reference of one source stop in ``namespace``, such as an
+    ATLAS SLOID in ``ref:sloid``. Several OSM elements may carry it (a platform,
+    its stop position, its platform way), and one tag may list several values
+    separated by ``separator``. A value that does not match ``pattern`` is
+    malformed: never compared, only reported.
+    """
+    namespace: str
+    osm_tags: tuple[str, ...]
+    pattern: str = r'\S+'
+    separator: str = ';'
+    source_namespace: str | None = None
+
+    def __post_init__(self):
+        if not self.namespace or not self.osm_tags or not self.separator:
+            raise ValueError('Identifier rules require a namespace, OSM tags and a separator')
+        re.compile(self.pattern)
+
+    def values(self, tags) -> tuple[str, ...]:
+        """Every value the tags list, in tag order and without repeats."""
+        found = []
+        for key in self.osm_tags:
+            if tags.get(key):
+                found.extend(part.strip() for part in str(tags[key]).split(self.separator))
+        return tuple(dict.fromkeys(value for value in found if value))
+
+    def is_well_formed(self, value: str) -> bool:
+        return re.fullmatch(self.pattern, value) is not None
 
 
 @dataclass(frozen=True)
@@ -43,6 +77,7 @@ class MatchingProfile:
     long_distance: float = 150.0
     name_match_max_distance: float | None = 1000.0
     reference_rules: tuple[ReferenceRule, ...] = ()
+    identifier_rules: tuple[IdentifierRule, ...] = ()
     station_reference_matching: bool = False
     osm_station_ref_tag: str = 'uic_ref'
     problem_name_tags: tuple[str, ...] = ('name', 'uic_name')
@@ -50,7 +85,7 @@ class MatchingProfile:
     osm_grouping: bool = False
     grouping: GroupingPolicy = field(default_factory=GroupingPolicy)
     predicate_names: tuple[str, ...] = (
-        'two_sided_stop', 'reference', 'name', 'gtfs_route', 'group_distance',
+        'identifier', 'two_sided_stop', 'reference', 'name', 'gtfs_route', 'group_distance',
         'group_long_distance', 'local_ref_distance', 'distance_only_candidate',
         'distance_ratio', 'distance_only_candidate_second_pass',
     )

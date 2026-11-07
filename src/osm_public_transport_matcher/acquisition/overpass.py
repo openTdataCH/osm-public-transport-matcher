@@ -14,6 +14,7 @@ from osm_public_transport_matcher.core.osm_tags import (
     LIFECYCLE_KEY_PATTERN,
     LIFECYCLE_VALUE_PATTERN,
     PUBLIC_TRANSPORT_ROUTE_PATTERN,
+    STOP_IDENTIFIER_KEYS,
     STOP_TAG_SELECTORS,
 )
 
@@ -44,6 +45,9 @@ def build_public_transport_query(country_code: str = "CH") -> str:
         f'            node(area.searchArea)["{key}"{operator}"{value}"];'
         for key, operator, value in STOP_TAG_SELECTORS
     )
+    identifier_ways = "\n".join(
+        f'            way(area.searchArea)["{key}"];' for key in STOP_IDENTIFIER_KEYS
+    )
     return f'''
         [out:xml][timeout:360];
         area["ISO3166-1"="{country_code.upper()}"]->.searchArea;
@@ -56,6 +60,7 @@ def build_public_transport_query(country_code: str = "CH") -> str:
         (
             way(area.searchArea)["aerialway"="station"]["public_transport"="station"];
             way(area.searchArea)["uic_ref"];
+{identifier_ways}
         )->.candidate_ways;
 
         (

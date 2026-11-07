@@ -15,7 +15,18 @@ consumer side.
 
 ### Matching
 
+- **Identifier matching** — A new first rule, `identifier`, links every OSM element whose identifier tag names a source stop within 150 m to that stop, as `sloid_identifier`. In the Swiss profile, the tags are `ref:sloid` and `railway:ref:sloid` (an `IdentifierRule` of `profiles.SWITZERLAND`), and one tag may list several SLOIDs separated by `;`. A stop takes every element that names it, and the element's PTv2 partner follows it when the element names one platform. On the Swiss data of 6 November 2026, 799 of the 806 OSM elements whose SLOID names an ATLAS platform are matched to that platform, against 487 of 559 before. The other seven are four disused elements, one station and two elements whose SLOID was copied from a stop 200 m away: these two are reported and matched to their own stop by route evidence. See [E2.1](2.1%20Reference%20matching.md#identifier-matching-identifier).
+- **Station shortcuts after identifiers** — Where an identifier linked part of a station, the reference rule's `one_osm` and `one_source` branches and the name rule's `one_osm` branch no longer apply there: the elements left are not the whole station. Only platform codes link them; the route and distance rules decide the rest. See [E2.1](2.1%20Reference%20matching.md#stations-already-touched-by-identifiers).
 - **Platform labels before shared routes** — A line can call at several platforms of a big station, so the GTFS route rule leaves out candidates labelled with another platform when a candidate within 50 m has `local_ref` equal to the stop's platform code. At Zürich HB, Löwenstrasse, platform 32 no longer matches the stop position labelled 31; stops without a platform code are unaffected. See [E2.3](2.3%20GTFS%20route%20matching.md#platform-labels).
+
+### Inputs
+
+- **Platform ways with a SLOID** — The Overpass query also downloads ways with `ref:sloid` or `railway:ref:sloid`, and `read_osm()` keeps those that are not stops in their own right as `identifier_only` elements. They are linked only by their identifier, after all rules, as extra elements that take no stop away from another. See [E1.3](1.3%20OSM%20data.md#stop-identifiers).
+
+### Results and operations
+
+- **`identifier` problem** — P1 when an element's identifier names a stop more than 150 m away, P2 when it names no stop, P3 when it is malformed, such as a UIC number in `ref:sloid`. One problem per element, with the values in its evidence. See [E4.1](4.1%20Stop%20Problems.md#identifier-problems).
+- **Bundle** — `osm_nodes` rows carry `identifier_only`; a missing value counts as false, so earlier schema 1 bundles stay valid. The progress catalog has a new stage, `stop_matching.identifier`.
 
 ---
 
