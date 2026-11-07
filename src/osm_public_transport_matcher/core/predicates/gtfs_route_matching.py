@@ -5,6 +5,10 @@ Matches source stops to OSM nodes that share a GTFS route (``gtfs_shared_route``
 or, failing that, a GTFS direction name (``gtfs_shared_direction``).
 Route data is provided by SourceState (loaded from normalized GTFS route CSVs) and OsmState
 (derived from the OSM XML relation pass) — no file I/O happens here.
+
+A line can serve several platforms of a big station, so a shared route does not
+outweigh a platform label: when a candidate's ``local_ref`` equals the stop's
+platform code, candidates labelled otherwise are left out for that stop.
 """
 import logging
 from collections import defaultdict
@@ -18,6 +22,25 @@ from osm_public_transport_matcher.core.utils.route_matching import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _labels(local_ref) -> set[str]:
+    """An element's platform labels: its ``local_ref`` values, split on ``;``, ignoring case."""
+    return {part.strip().lower() for part in str(local_ref or '').split(';') if part.strip()}
+
+
+def _without_other_platforms(entry, candidates: list[tuple]) -> list[tuple]:
+    """Drop candidates labelled with another platform when one carries the stop's platform code.
+
+    Such a candidate shows that both sides label platforms alike, so a different label
+    means a different platform. Without it the labels may follow different schemes
+    (``A`` against ``Nord``, or a stop number in ``ref``) and every candidate is kept.
+    """
+    code = (entry.platform_code or '').strip().lower()
+    if not code or not any(code in _labels(node.local_ref) for node, _ in candidates):
+        return candidates
+    return [(node, dist) for node, dist in candidates
+            if code in _labels(node.local_ref) or not _labels(node.local_ref)]
 
 
 def _collect_unique_best_edges(edges: list[dict], key_name: str, score_name: str) -> dict[str, dict]:
@@ -99,11 +122,11 @@ class GtfsRoutePredicate(BasePredicate):
             source_direction_names = build_source_direction_names(source_route_evidence)
 
             # Find OSM candidates within max_distance
-            candidates = [
+            candidates = _without_other_platforms(entry, [
                 (node, dist)
                 for node, dist in batch_candidates[i]
                 if not ctx.osm.is_used(node.node_id)
-            ]
+            ])
             if not candidates:
                 continue
 

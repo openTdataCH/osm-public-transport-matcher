@@ -11,6 +11,14 @@ consumer side.
 
 ---
 
+## Unreleased
+
+### Matching
+
+- **Platform labels before shared routes** — A line can call at several platforms of a big station, so the GTFS route rule leaves out candidates labelled with another platform when a candidate within 50 m has `local_ref` equal to the stop's platform code. At Zürich HB, Löwenstrasse, platform 32 no longer matches the stop position labelled 31; stops without a platform code are unaffected. See [E2.3](2.3%20GTFS%20route%20matching.md#platform-labels).
+
+---
+
 ## Version 0.1.0
 
 First public release.

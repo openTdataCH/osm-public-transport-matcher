@@ -71,7 +71,7 @@ Name a stage and its match types after the evidence they use, and give each bran
 | `two_sided_stop` | Profile-approved station references; two source stops, the two sides and the middle of a PTv2 two-sided stop. | First, before reference matching, which would see the stop as one element. |
 | `reference` | A profile rule with compatible reference namespace, scope and OSM tag. Platform codes refine station candidates. | Before weaker evidence. |
 | `name` | Exact source name against OSM name/UIC-name/GTFS-name; platform code can disambiguate. | Before GTFS route/distance. |
-| `gtfs_route` | Scoped GTFS route IDs and direction IDs, or direction labels; mutual unique best candidate. | Before distance. |
+| `gtfs_route` | Scoped GTFS route IDs and direction IDs, or direction labels; mutual unique best candidate. Where a candidate carries the stop's platform code, candidates labelled with another platform are left out. | Before distance. |
 | `group_distance` | Name or approved station groups; maximum-cardinality assignment under the distance cap. | First distance stage. |
 | `group_long_distance` | Same evidence under the profile's longer cap. | After `group_distance`. |
 | `local_ref_distance` | Equal platform code and `local_ref` within the normal distance cap. | Before nearest-only rules. |

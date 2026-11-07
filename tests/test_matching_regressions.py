@@ -94,6 +94,15 @@ def _build_ctx(
     return MatchingContext(source=source_state, osm=osm_state, max_distance=50.0, profile=SWITZERLAND)
 
 
+def _osm_routes(*routes):
+    return [{'gtfs_route_id': f'{route}-j26', 'direction_id': direction} for route, direction in routes]
+
+
+def _source_routes(*routes):
+    return {'gtfs': [{'route_id': f'{route}-j26', 'route_id_normalized': f'{route}-jXX', 'direction_id': direction}
+                     for route, direction in routes]}
+
+
 class SingleCommitPredicate(BasePredicate):
     def __init__(self, match_type: str, atlas_index: int, osm_id: str):
         super().__init__(name=match_type)
@@ -443,6 +452,92 @@ class TestCurrentPredicates:
         assert ctx.all_matches[0].match_type.endswith('_group_distance')
         assert ctx.all_matches[1].match_type.endswith('_group_distance')
         assert 's3' not in matched_sloids
+
+
+class TestRouteMatchingAndPlatformLabels:
+    def test_route_direction_decides_between_unlabelled_metro_stops(self):
+        # EPFL, metro M1: no platform codes or local_ref, 35 m against 37 m for the
+        # first stop; only the direction of the M1 tells the two stop positions apart.
+        ctx = _build_ctx(
+            [
+                _source_row('1214:0:1901', '8501214', '', 'Ecublens VD, EPFL', 46.52225546745, 6.56569731991),
+                _source_row('1214:0:1892', '8501214', '', 'Ecublens VD, EPFL', 46.52216882494, 6.56612880216),
+            ],
+            [
+                _osm_entry('334288866', 46.5222435, 6.5661495, name='EPFL', uic_name='Ecublens VD, EPFL', uic_ref='8501214'),
+                _osm_entry('334288827', 46.5221568, 6.5661598, name='EPFL', uic_name='Ecublens VD, EPFL', uic_ref='8501214'),
+                _osm_entry('2775838598', 46.5221982, 6.5661540, name='EPFL', uic_name='Ecublens VD, EPFL', uic_ref='8501214',
+                           public_transport='station', railway='station'),
+            ],
+            node_routes={'334288866': _osm_routes(('m1', '1')), '334288827': _osm_routes(('m1', '0'))},
+            atlas_route_evidence_by_sloid={
+                '1214:0:1901': _source_routes(('m1', '1')),
+                '1214:0:1892': _source_routes(('m1', '0')),
+            },
+        )
+
+        run_pipeline(_predicates(SWITZERLAND), ctx)
+
+        assert sorted((r.source_node.source_id, r.osm_node.node_id, r.match_type) for r in ctx.all_matches) == [
+            ('1214:0:1892', '334288827', 'gtfs_shared_route'),
+            ('1214:0:1901', '334288866', 'gtfs_shared_route'),
+        ]
+
+    def test_route_does_not_override_an_element_with_the_platform_code(self):
+        # Zürich HB, Löwenstrasse: S-Bahn lines use several tracks, so track 32 shares
+        # more routes with the element labelled 31 than with its own, and track 31
+        # shares as many with both. An element labelled with the stop's code rules
+        # out the elements labelled with other tracks.
+        tracks = {'name': 'Zürich Hauptbahnhof (Löwenstrasse)', 'uic_name': 'Zürich HB Löwenstrasse', 'uic_ref': '8516144'}
+        ctx = _build_ctx(
+            [
+                _source_row('3000:500:31', '8503000', '31', 'Zürich HB', 47.37834457128, 8.53665175625),
+                _source_row('3000:500:32', '8503000', '32', 'Zürich HB', 47.37845731492, 8.53671803741),
+            ],
+            [
+                _osm_entry('5609695629', 47.3781990, 8.5371091, local_ref='31', **tracks),
+                _osm_entry('5609695630', 47.3783409, 8.5371991, local_ref='32', **tracks),
+            ],
+            node_routes={
+                '5609695629': _osm_routes(('s8', '1'), ('s19', '1'), ('s2', '0'), ('s36', '0')),
+                '5609695630': _osm_routes(('s14', '0'), ('s19', '1')),
+            },
+            atlas_route_evidence_by_sloid={
+                '3000:500:31': _source_routes(('s8', '1'), ('s19', '1'), ('s14', '0')),
+                '3000:500:32': _source_routes(('s2', '0'), ('s36', '0'), ('s8', '1')),
+            },
+        )
+
+        run_pipeline(_predicates(SWITZERLAND), ctx)
+
+        assert sorted((r.source_node.source_id, r.osm_node.node_id, r.match_type) for r in ctx.all_matches) == [
+            ('3000:500:31', '5609695629', 'gtfs_shared_route'),
+            ('3000:500:32', '5609695630', 'local_ref_distance'),
+        ]
+
+    def test_labels_of_another_scheme_leave_the_decision_to_the_route(self):
+        # Platform codes A and B against local_ref Nord and Süd: no candidate carries
+        # the stop's code, so the labels say nothing and the direction decides,
+        # although each stop is closer to the other direction's element.
+        ctx = _build_ctx(
+            [
+                _source_row('north', 'u1', 'A', 'Stop', 47.00000, 8.00000),
+                _source_row('south', 'u1', 'B', 'Stop', 47.00020, 8.00000),
+            ],
+            [
+                _osm_entry('osm_nord', 47.00012, 8.00000, local_ref='Nord'),
+                _osm_entry('osm_sued', 47.00008, 8.00000, local_ref='Süd'),
+            ],
+            node_routes={'osm_nord': _osm_routes(('bus', '0')), 'osm_sued': _osm_routes(('bus', '1'))},
+            atlas_route_evidence_by_sloid={'north': _source_routes(('bus', '0')), 'south': _source_routes(('bus', '1'))},
+        )
+
+        GtfsRoutePredicate().run(ctx)
+
+        assert sorted((r.source_node.source_id, r.osm_node.node_id) for r in ctx.all_matches) == [
+            ('north', 'osm_nord'),
+            ('south', 'osm_sued'),
+        ]
 
 
 class TestStaleCandidateRegression:
