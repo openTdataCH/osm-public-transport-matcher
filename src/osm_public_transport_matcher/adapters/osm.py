@@ -4,10 +4,9 @@ import logging
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from pathlib import Path
-from osm_public_transport_matcher.core.models import OsmNode
 from osm_public_transport_matcher.adapters.osm_routes import public_transport_relation_ids
 from osm_public_transport_matcher.core.osm_tags import STOP_IDENTIFIER_KEYS, lifecycle_of
-from osm_public_transport_matcher.core.state import OsmState
+from osm_public_transport_matcher.core.state import OsmState, osm_node_from_entry
 
 logger = logging.getLogger(__name__)
 
@@ -237,34 +236,8 @@ def read_osm(xml_file: str | Path, *, route_namespace: str | None = None, route_
         f"{len(node_routes)} nodes with route data"
     )
     return OsmState.from_records(
-        [_osm_node(entry) for entry in all_nodes.values()],
+        [osm_node_from_entry(entry) for entry in all_nodes.values()],
         name_dirs={key: values for key, values in name_dirs.items() if key in all_nodes},
         uic_dirs={key: values for key, values in uic_dirs.items() if key in all_nodes},
         node_routes={key: values for key, values in node_routes.items() if key in all_nodes},
     )
-
-
-
-def _osm_node(entry: dict) -> OsmNode:
-    def _str(v):
-        return str(v).strip() if v is not None else None
-
-    tags = entry.get('tags', {})
-    return OsmNode(
-        node_id=str(entry['node_id']),
-        lat=float(entry['lat']),
-        lon=float(entry['lon']),
-        local_ref=_str(entry.get('local_ref')),
-        name=_str(tags.get('name')),
-        uic_name=_str(tags.get('uic_name')),
-        uic_ref=_str(tags.get('uic_ref')),
-        network=_str(tags.get('network', '')),
-        operator=_str(tags.get('operator', '')),
-        public_transport=_str(tags.get('public_transport')),
-        railway=_str(tags.get('railway')),
-        amenity=_str(tags.get('amenity')),
-        aerialway=_str(tags.get('aerialway')),
-        tags=tags,
-        identifier_only=bool(entry.get('identifier_only', False)),
-    )
-

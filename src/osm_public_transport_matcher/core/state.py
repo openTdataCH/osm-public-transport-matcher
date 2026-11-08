@@ -79,6 +79,33 @@ class SourceState:
     def get_all_rows_as_dict(self):
         return dict(self._records)
 
+def osm_node_from_entry(entry: dict) -> OsmNode:
+    """The strict OsmNode of an entry dictionary, as the OSM adapter and OsmState hold them."""
+    def _str(v):
+        return str(v).strip() if v is not None else None
+
+    tags = entry.get('tags', {})
+    return OsmNode(
+        node_id=str(entry['node_id']),
+        lat=float(entry['lat']),
+        lon=float(entry['lon']),
+        local_ref=_str(entry.get('local_ref')),
+        name=_str(tags.get('name')),
+        uic_name=_str(tags.get('uic_name')),
+        uic_ref=_str(tags.get('uic_ref')),
+        network=_str(tags.get('network', '')),
+        operator=_str(tags.get('operator', '')),
+        public_transport=_str(tags.get('public_transport')),
+        railway=_str(tags.get('railway')),
+        amenity=_str(tags.get('amenity')),
+        aerialway=_str(tags.get('aerialway')),
+        tags=tags,
+        element_type=entry.get('element_type', 'node'),
+        station_reference=_str(entry.get('station_ref')),
+        identifier_only=bool(entry.get('identifier_only', False)),
+    )
+
+
 class OsmState:
     @classmethod
     def from_records(cls, nodes, node_routes=None, name_dirs=None, uic_dirs=None, station_ref_tag='uic_ref',
@@ -113,30 +140,7 @@ class OsmState:
         return cls(records, dict(uic_index), dict(name_index), name_dirs, uic_dirs, node_routes)
 
     def _to_osm_node(self, entry: dict) -> 'OsmNode':
-        """Internal helper to convert dictionary entries into our strict entity model."""
-        def _str(v):
-            return str(v).strip() if v is not None else None
-            
-        tags = entry.get('tags', {})
-        return OsmNode(
-            node_id=str(entry['node_id']),
-            lat=float(entry['lat']),
-            lon=float(entry['lon']),
-            local_ref=_str(entry.get('local_ref')),
-            name=_str(tags.get('name')),
-            uic_name=_str(tags.get('uic_name')),
-            uic_ref=_str(tags.get('uic_ref')),
-            network=_str(tags.get('network', '')),
-            operator=_str(tags.get('operator', '')),
-            public_transport=_str(tags.get('public_transport')),
-            railway=_str(tags.get('railway')),
-            amenity=_str(tags.get('amenity')),
-            aerialway=_str(tags.get('aerialway')),
-            tags=tags,
-            element_type=entry.get('element_type', 'node'),
-            station_reference=_str(entry.get('station_ref')),
-            identifier_only=bool(entry.get('identifier_only', False)),
-        )
+        return osm_node_from_entry(entry)
 
     def __init__(self, nodes: dict, uic_ref_dict: dict, name_index: dict,
                  name_dirs: dict = None, uic_dirs: dict = None,
