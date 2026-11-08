@@ -224,6 +224,14 @@ def _detect(output, profile, route_state, identifier_links=(), identifier_unlink
         for result in unmatched_problem(ctx, node):
             p = _problem(result, osm_ids=[node.node_id], evidence={'nearest_source_distance_m': nearest})
             problems[p.problem_id] = p
+    # A stop linked only by such an element is matched after all: it is no
+    # longer unmatched, isolated or an unmatched problem.
+    linked_stops = {record.source_node.key for record in identifier_links}
+    if linked_stops & {node.key for node in output.unmatched_source}:
+        output.unmatched_source = [node for node in output.unmatched_source if node.key not in linked_stops]
+        output.source_isolated_keys = [key for key in output.source_isolated_keys if key not in linked_stops]
+        problems = {key: p for key, p in problems.items()
+                    if not (p.problem_type == 'unmatched' and set(p.source_keys) & linked_stops)}
     output.matched.extend(identifier_links)
     output.unmatched_osm.extend(kept)
     output.all_osm_nodes.extend([*linked, *kept])

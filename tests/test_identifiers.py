@@ -110,6 +110,18 @@ def test_identifier_only_ways_add_links_without_taking_stops_from_other_elements
     validate_bundle(write_bundle(output, tmp_path / 'run'))
 
 
+def test_a_stop_whose_only_element_is_a_tagged_way_is_matched(tmp_path):
+    # The way is linked after the rules ran, when the stop was already counted
+    # unmatched: it must leave the unmatched stops and their problems.
+    stop = atlas('ch:1:sloid:11:0:1', 47.0, 8.0)
+    output = match([stop], [osm('110', 47.0, 8.0002, way=True, public_transport='platform',
+                                ref__sloid=stop.source_id)], SWITZERLAND)
+    assert links(output) == {(stop.source_id, 'way_110', 'sloid_identifier')}
+    assert output.unmatched_source == [] and output.source_isolated_keys == []
+    assert not any(p.problem_type == 'unmatched' for p in output.problems)
+    validate_bundle(write_bundle(output, tmp_path / 'run'))
+
+
 def test_the_ptv2_partner_follows_a_tagged_element_unless_it_has_its_own_identifier():
     stop, other = atlas('ch:1:sloid:7:0:1', 47.0, 8.0, uic='8500007'), atlas('ch:1:sloid:7:0:2', 47.001, 8.0, uic='8500007')
     elements = [
