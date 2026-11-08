@@ -129,6 +129,20 @@ def test_an_itinerary_pairs_with_the_variant_ending_where_it_ends_whatever_the_p
     assert _pair(sources, [{'id': 10, 'direction_id': '0'}], calls) == [(2, 10)]
 
 
+def test_the_variant_with_the_same_ends_wins_over_one_sharing_more_stops():
+    # Bus 791 Schwägalp -> Urnäsch: the variant running on to St. Gallen shares
+    # 12 of 14 stops, the one ending at Urnäsch 11 of 12; the terminus decides.
+    osm_stops = [(station, 0) for station in range(1, 13)]
+    calls = {
+        1: _calls(*osm_stops, (13, 0), (14, 0)),
+        2: _calls(*osm_stops[:10], (99, 0), osm_stops[11]),
+        10: _calls(*osm_stops),
+    }
+    sources = [{'id': 1, 'direction_id': '0'}, {'id': 2, 'direction_id': '0'}]
+
+    assert _pair(sources, [{'id': 10, 'direction_id': '0'}], calls) == [(2, 10)]
+
+
 def test_shared_platforms_break_a_tie_between_variants_serving_the_same_stations():
     calls = {1: _calls((1, 2), (2, 2), (3, 2)), 2: _calls((1, 1), (2, 1), (3, 1)), 10: _calls((1, 1), (2, 1), (3, 2))}
     sources = [{'id': 1, 'direction_id': '0'}, {'id': 2, 'direction_id': '0'}]

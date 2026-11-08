@@ -924,6 +924,13 @@ def _direction_ids_match(source_itinerary: dict[str, Any], osm_itinerary: dict[s
     return source_direction is not None and source_direction == osm_direction
 
 
+def _matched_end_count(source_calls, osm_calls) -> int:
+    """How many of the two ends, first and last stop, are the same stop on both sides."""
+    if not source_calls or not osm_calls:
+        return 0
+    return sum(_same_stop(_stop_identity(source_calls[index]), _stop_identity(osm_calls[index])) for index in (0, -1))
+
+
 def _score_itinerary_pair(
     source_itinerary: dict[str, Any],
     osm_itinerary: dict[str, Any],
@@ -952,7 +959,8 @@ def _score_itinerary_pair(
         'overall_score': stop_score,
         'match_reason': match_reason,
         'matched_stop_count': matched_stop_count,
-        # Breaks ties between eligible itineraries serving the same stations.
+        # Rank eligible pairs (see _choose_best_itinerary_pairs).
+        'matched_end_count': _matched_end_count(source_calls, osm_calls) if is_eligible else 0,
         'matched_platform_count': (_count_stop_sequence_matches(source_calls, osm_calls, _same_platform)
                                    if is_eligible else 0),
         'source_stop_count': len(source_calls),
@@ -966,8 +974,13 @@ def _choose_best_itinerary_pairs(
     osm_itineraries: list[dict[str, Any]],
     pair_scores: dict[tuple[int, int], dict[str, Any]],
 ) -> list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]]:
-    """Choose eligible pairs greedily and one-to-one: most shared stops, then the
-    higher ratio, then most shared platforms."""
+    """Choose eligible pairs greedily and one-to-one.
+
+    A pair starting and ending at the same stops comes first, then the higher
+    ratio, then more shared stops, then more shared platforms. Among the
+    itineraries that share enough stops, the one with the same terminus is the
+    counterpart, also when another one shares a stop more by running further.
+    """
     candidates = [
         (source_itinerary, osm_itinerary, pair_scores[(source_itinerary['id'], osm_itinerary['id'])])
         for source_itinerary in sorted(source_itineraries, key=lambda row: row['id'])
@@ -976,8 +989,9 @@ def _choose_best_itinerary_pairs(
     ]
     candidates.sort(
         key=lambda item: (
-            -item[2]['matched_stop_count'],
+            -item[2]['matched_end_count'],
             -item[2]['stop_score'],
+            -item[2]['matched_stop_count'],
             -item[2]['matched_platform_count'],
             item[0]['id'],
             item[1]['id'],
