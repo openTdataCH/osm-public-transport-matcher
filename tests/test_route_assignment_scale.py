@@ -19,6 +19,7 @@ def test_choose_best_itinerary_pairs_handles_large_source_small_osm_without_recu
                 'is_eligible': matched > 0,
                 'matched_stop_count': matched,
                 'stop_score': score,
+                'matched_platform_count': matched,
             }
 
     chosen_pairs = _choose_best_itinerary_pairs(source_itineraries, osm_itineraries, pair_scores)

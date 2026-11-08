@@ -854,12 +854,18 @@ def _stop_identity(stop_call: dict[str, Any]) -> tuple[frozenset[str], str | Non
     return frozenset(identities), _to_text(stop_call.get('station_ref'))
 
 
+def _same_platform(left, right) -> bool:
+    """Both calls resolve to the same source stop."""
+    return bool(left[0] & right[0])
+
+
 def _same_stop(left, right) -> bool:
-    left_keys, left_station = left
-    right_keys, right_station = right
-    if left_keys and right_keys:
-        return bool(left_keys & right_keys)
-    return bool(left_station and left_station == right_station)
+    """The same platform, or the same station at another platform.
+
+    Which platform a train or bus uses is a stop matching question; for the
+    itinerary, a call at another platform of the station still serves it.
+    """
+    return _same_platform(left, right) or bool(left[1] and left[1] == right[1])
 
 
 def _member_kind(role: Any) -> str | None:
@@ -881,7 +887,9 @@ def _one_call_per_stop_visit(call_rows: list[dict[str, Any]]) -> list[dict[str, 
 
     PTv2 relations list both members of a stop one after the other. As two
     calls they double the OSM itinerary length and halve the stop ratio of an
-    itinerary that matches its source itinerary exactly. The merged call keeps
+    itinerary that matches its source itinerary exactly. They are one visit
+    when they are the same stop by ``_same_stop``, also when stop matching
+    linked them to different platforms of the station. The merged call keeps
     the member with a resolved source key, else the first one.
     """
     calls: list[dict[str, Any]] = []
@@ -896,7 +904,7 @@ def _one_call_per_stop_visit(call_rows: list[dict[str, Any]]) -> list[dict[str, 
     return calls
 
 
-def _count_stop_sequence_matches(source_calls, osm_calls):
+def _count_stop_sequence_matches(source_calls, osm_calls, same=_same_stop):
     """Length of the longest common subsequence of stops, in O(m) memory."""
     source = [_stop_identity(call) for call in source_calls]
     osm = [_stop_identity(call) for call in osm_calls]
@@ -904,7 +912,7 @@ def _count_stop_sequence_matches(source_calls, osm_calls):
     for left_call in source:
         current = [0]
         for j, right_call in enumerate(osm):
-            current.append(previous[j] + 1 if _same_stop(left_call, right_call)
+            current.append(previous[j] + 1 if same(left_call, right_call)
                            else max(previous[j + 1], current[j]))
         previous = current
     return previous[-1]
@@ -944,6 +952,9 @@ def _score_itinerary_pair(
         'overall_score': stop_score,
         'match_reason': match_reason,
         'matched_stop_count': matched_stop_count,
+        # Breaks ties between eligible itineraries serving the same stations.
+        'matched_platform_count': (_count_stop_sequence_matches(source_calls, osm_calls, _same_platform)
+                                   if is_eligible else 0),
         'source_stop_count': len(source_calls),
         'osm_stop_count': len(osm_calls),
         'is_eligible': is_eligible,
@@ -955,7 +966,8 @@ def _choose_best_itinerary_pairs(
     osm_itineraries: list[dict[str, Any]],
     pair_scores: dict[tuple[int, int], dict[str, Any]],
 ) -> list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]]:
-    """Choose eligible pairs greedily and one-to-one, most shared stops first."""
+    """Choose eligible pairs greedily and one-to-one: most shared stops, then the
+    higher ratio, then most shared platforms."""
     candidates = [
         (source_itinerary, osm_itinerary, pair_scores[(source_itinerary['id'], osm_itinerary['id'])])
         for source_itinerary in sorted(source_itineraries, key=lambda row: row['id'])
@@ -966,6 +978,7 @@ def _choose_best_itinerary_pairs(
         key=lambda item: (
             -item[2]['matched_stop_count'],
             -item[2]['stop_score'],
+            -item[2]['matched_platform_count'],
             item[0]['id'],
             item[1]['id'],
         )

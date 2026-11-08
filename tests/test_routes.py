@@ -1,5 +1,6 @@
 from osm_public_transport_matcher.routes import (
     _build_itinerary_rows,
+    _choose_best_itinerary_pairs,
     _count_stop_sequence_matches,
     _one_call_per_stop_visit,
     _resolve_osm_stop_fields,
@@ -80,7 +81,7 @@ def test_score_itinerary_pair_requires_exact_direction_and_80_percent_stop_ratio
     assert score_row['match_reason'] == 'ordered_stop_match'
 
 
-def test_score_itinerary_pair_uses_station_reference_only_without_resolved_identity():
+def test_score_itinerary_pair_counts_the_station_with_or_without_resolved_platforms():
     source_itinerary = {'direction_id': '1'}
     osm_itinerary = {'direction_id': '1'}
     source_calls = [{
@@ -96,9 +97,43 @@ def test_score_itinerary_pair_uses_station_reference_only_without_resolved_ident
     assert score_row['matched_stop_count'] == 1
     assert score_row['is_eligible'] is True
 
+    # Another platform of the same station still serves it; another station does not.
     resolved_elsewhere = [{**source_calls[0], 'source_stop_key': 'atlas:other'}]
     osm_resolved = [{**osm_calls[0], 'source_stop_key': 'atlas:this'}]
-    assert _score_itinerary_pair(source_itinerary, osm_itinerary, resolved_elsewhere, osm_resolved)['matched_stop_count'] == 0
+    other_platform = _score_itinerary_pair(source_itinerary, osm_itinerary, resolved_elsewhere, osm_resolved)
+    assert (other_platform['matched_stop_count'], other_platform['matched_platform_count']) == (1, 0)
+    other_station = [{**osm_resolved[0], 'station_ref': '8500200'}]
+    assert _score_itinerary_pair(source_itinerary, osm_itinerary, resolved_elsewhere, other_station)['matched_stop_count'] == 0
+
+
+def _calls(*stops):
+    """Stop calls from (station, platform) pairs; the platform is the resolved source stop."""
+    return [{'source_stop_key': f'atlas:{station}:{platform}', 'station_ref': station} for station, platform in stops]
+
+
+def _pair(source_itineraries, osm_itineraries, calls):
+    scores = {(source['id'], osm['id']): _score_itinerary_pair(source, osm, calls[source['id']], calls[osm['id']])
+              for source in source_itineraries for osm in osm_itineraries}
+    return [(source['id'], osm['id']) for source, osm, _ in
+            _choose_best_itinerary_pairs(source_itineraries, osm_itineraries, scores)]
+
+
+def test_an_itinerary_pairs_with_the_variant_ending_where_it_ends_whatever_the_platform():
+    # S10 at Zürich Selnau (station 90): trains running on to Zürich HB (88)
+    # call at platform 1, trains ending at Selnau at platform 2. The OSM
+    # relation ends at Selnau, on the stop position matched to platform 1.
+    line = [(57, 0), (56, 0), (55, 0), (54, 0), (53, 0), (52, 0), (51, 0)]
+    calls = {1: _calls(*line, (90, 1), (88, 22)), 2: _calls(*line, (90, 2)), 10: _calls(*line, (90, 1))}
+    sources = [{'id': 1, 'direction_id': '0'}, {'id': 2, 'direction_id': '0'}]
+
+    assert _pair(sources, [{'id': 10, 'direction_id': '0'}], calls) == [(2, 10)]
+
+
+def test_shared_platforms_break_a_tie_between_variants_serving_the_same_stations():
+    calls = {1: _calls((1, 2), (2, 2), (3, 2)), 2: _calls((1, 1), (2, 1), (3, 1)), 10: _calls((1, 1), (2, 1), (3, 2))}
+    sources = [{'id': 1, 'direction_id': '0'}, {'id': 2, 'direction_id': '0'}]
+
+    assert _pair(sources, [{'id': 10, 'direction_id': '0'}], calls) == [(2, 10)]
 
 
 def test_build_itinerary_rows_prefers_osm_from_to_for_display_and_to_for_headsign():
@@ -204,9 +239,10 @@ def test_stop_position_and_platform_of_one_stop_make_one_call():
         member(7, 'platform', 'atlas:E', '8591338'),
     ])
 
-    # The resolved member stands for its stop; repeated platforms and
-    # members resolved to different source stops stay separate calls.
-    assert [call['stop_sequence'] for call in calls] == [0, 3, 4, 5, 6, 7]
+    # The resolved member stands for its stop, also when the two members were
+    # matched to different platforms of the station (6 and 7); repeated
+    # platforms stay separate calls.
+    assert [call['stop_sequence'] for call in calls] == [0, 3, 4, 5, 6]
 
     source_calls = [{'source_stop_key': key, 'station_ref': None} for key in ('atlas:A', 'atlas:B')]
     osm_calls = [{'source_stop_key': call['resolved_source_key'], 'station_ref': call['station_ref']}
