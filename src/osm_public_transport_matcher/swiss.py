@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from osm_public_transport_matcher.timing import stage
 from pathlib import Path
 
@@ -22,6 +23,12 @@ from osm_public_transport_matcher.adapters.osm_routes import process_osm_routes_
 from osm_public_transport_matcher.adapters.route_products import (
     load_source_route_products, read_gtfs_identity_cache, scope_source_stop_keys, unresolved_osm_member_diagnostics,
 )
+
+
+def timetable_line_number(ref: str) -> str | None:
+    """The line number in a Swiss timetable number: OSM often tags bus line 158 as 31.158."""
+    match = re.fullmatch(r'\d{2}\.(\d{3})', ref)
+    return (match.group(1).lstrip('0') or '0') if match else None
 
 
 def _boundary_selector(path: Path):
@@ -153,6 +160,7 @@ def run_matching(
             scope_source_stop_keys(route_data, keys_by_id), set(keys_by_id.values()), base_data=output,
             require_direction_match=SWITZERLAND.itinerary_require_direction,
             min_stop_ratio=SWITZERLAND.itinerary_min_stop_ratio,
+            line_number_alias=timetable_line_number,
         )
     output.extensions.update({'gtfs_stops': stop_rows, 'gtfs_atlas_state': identity_rows,
                               'gtfs_atlas_stats': gtfs_stats, 'atlas_filtering': source_metadata.get('atlas_filtering', {})})

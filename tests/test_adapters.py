@@ -163,7 +163,8 @@ def test_swiss_fresh_gtfs_exports_identity_and_normalized_route_match_without_so
         {'sloid': 'ch:1:sloid:B', 'number': '8500002', 'designation': 'B', 'designationOfficial': 'Beta', 'wgs84North': '48.002', 'wgs84East': '2'},
     ], delimiter=';')
     osm = _osm(tmp_path / 'osm.xml')
-    osm.write_text(osm.read_text().replace('R-j25', 'R-j24'))
+    tagged = osm.read_text().replace('R-j25', 'R-j24')
+    osm.write_text(tagged.replace('<tag k="route" v="bus"/>', '<tag k="route" v="bus"/><tag k="ref" v="1"/>'))
     before = {path.name: path.read_bytes() for path in feed.iterdir()}
     output = run_matching(source, osm, gtfs_dir=feed)
     assert len(output.extensions['gtfs_stops']) == 2
@@ -172,6 +173,10 @@ def test_swiss_fresh_gtfs_exports_identity_and_normalized_route_match_without_so
     assert output.routes['line_family_matches'][0]['match_method'] == 'normalized_gtfs_route_id'
     assert {item['filename'] for item in output.metadata['inputs']} >= {'stops.txt', 'stop_times.txt', 'routes.txt', 'trips.txt'}
     assert {path.name: path.read_bytes() for path in feed.iterdir()} == before
+    # With the year ignored, the ID must also name a line with the same number.
+    for relation_tags in ('<tag k="route" v="bus"/>', '<tag k="route" v="bus"/><tag k="ref" v="2"/>'):
+        osm.write_text(tagged.replace('<tag k="route" v="bus"/>', relation_tags))
+        assert run_matching(source, osm, gtfs_dir=feed).routes['line_family_matches'] == []
 
 
 def test_explicit_boundary_changes_between_runs_are_respected(tmp_path):

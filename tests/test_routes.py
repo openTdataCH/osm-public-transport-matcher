@@ -214,3 +214,145 @@ def test_stop_position_and_platform_of_one_stop_make_one_call():
                                                        member(2, 'stop', 'atlas:B', '1'), member(3, 'platform', 'atlas:B', '1')])]
     score = _score_itinerary_pair({'direction_id': '0'}, {'direction_id': '0'}, source_calls, osm_calls)
     assert score['stop_score'] == 1.0 and score['is_eligible']
+
+
+def _link_lines(gtfs_lines, osm_lines, **options):
+    """Run compare_routes on a small network and return {OSM line: (GTFS route ID, match method)}.
+
+    ``gtfs_lines`` holds (route_id, short_name, route_type, itineraries) and
+    ``osm_lines`` holds (name, ref, route, gtfs_route_id, stops); every OSM line
+    is a route master with one relation. Stop ``X`` is the source stop
+    ``atlas:X`` and the OSM node ``nX``, which stop matching paired.
+    """
+    from types import SimpleNamespace
+
+    import pandas as pd
+
+    from osm_public_transport_matcher.core.models import MatchRecord, OsmNode, SourceStop
+    from osm_public_transport_matcher.profiles.switzerland import normalize_route_id
+    from osm_public_transport_matcher.routes import compare_routes
+
+    stops = sorted({stop for *_, itineraries in gtfs_lines for itinerary in itineraries for stop in itinerary}
+                   | {stop for *_, osm_stops in osm_lines for stop in osm_stops})
+    itineraries = [(route_id, f'{route_id}:{index}', index % 2, stop_list)
+                   for route_id, _, _, stop_lists in gtfs_lines for index, stop_list in enumerate(stop_lists)]
+    route_data = {
+        'source_routes': pd.DataFrame([
+            {'route_id': route_id, 'route_short_name': short_name, 'route_type': route_type,
+             'route_id_normalized': normalize_route_id(route_id)}
+            for route_id, short_name, route_type, _ in gtfs_lines]),
+        'source_itineraries': pd.DataFrame([
+            {'itinerary_id': itinerary_id, 'route_id': route_id, 'direction_id': str(direction)}
+            for route_id, itinerary_id, direction, _ in itineraries]),
+        'source_stop_calls': pd.DataFrame([
+            {'itinerary_id': itinerary_id, 'stop_sequence': sequence, 'source_stop_key': f'atlas:{stop}'}
+            for _, itinerary_id, _, stop_list in itineraries for sequence, stop in enumerate(stop_list)]),
+        'osm_route_masters': pd.DataFrame([
+            {'route_master_id': name, 'route_master': route, 'ref': ref, 'gtfs_route_id': route_id,
+             'route_id_normalized': normalize_route_id(route_id)}
+            for name, ref, route, route_id, _ in osm_lines]),
+        'osm_route_relations': pd.DataFrame([
+            {'relation_id': f'r-{name}', 'route': route, 'ref': ref, 'gtfs_route_id': route_id,
+             'route_id_normalized': normalize_route_id(route_id), 'route_master_id': name}
+            for name, ref, route, route_id, _ in osm_lines]),
+        'osm_route_relation_stops': pd.DataFrame([
+            {'relation_id': f'r-{name}', 'stop_sequence': sequence, 'osm_node_id': f'n{stop}', 'stop_role': 'platform'}
+            for name, *_, osm_stops in osm_lines for sequence, stop in enumerate(osm_stops)]),
+    }
+    matched = [MatchRecord(SourceStop('atlas', stop, 47.0, 8.0), OsmNode(f'n{stop}', 47.0, 8.0), 'test', 0.0, '')
+               for stop in stops]
+    base_data = SimpleNamespace(matched=matched, unmatched_source=[], unmatched_osm=[], all_osm_nodes=[], disused_osm=[])
+    routes = compare_routes(route_data, {f'atlas:{stop}' for stop in stops}, base_data, **options)
+    families = {row['id']: row for row in routes['line_families']}
+    return {families[row['osm_line_family_id']]['key']: (families[row['source_line_family_id']]['key'], row['match_method'])
+            for row in routes['line_family_matches']}
+
+
+def test_line_numbers_compare_without_case_and_spaces_and_with_the_profile_alias():
+    from osm_public_transport_matcher.routes import _line_number_keys
+    from osm_public_transport_matcher.swiss import timetable_line_number
+
+    assert _line_number_keys('IR 26') == _line_number_keys('ir26') == frozenset({'ir26'})
+    assert _line_number_keys(None) == frozenset()
+    assert not _line_number_keys('31.158') & _line_number_keys('158')
+    assert _line_number_keys('31.158', timetable_line_number) & _line_number_keys('158', timetable_line_number)
+    assert _line_number_keys('31.060', timetable_line_number) >= {'60'}
+    # A cableway section such as 2587.1 is not a timetable number of a bus line.
+    assert timetable_line_number('2587.1') is None
+
+
+def test_line_modes_follow_the_osm_route_and_the_gtfs_route_type():
+    from osm_public_transport_matcher.routes import _line_mode
+
+    def osm(route):
+        return _line_mode({'side': 'osm', 'route_type': route})
+
+    def source(route_type):
+        return _line_mode({'side': 'source', 'route_type': route_type})
+
+    assert (osm('trolleybus'), osm('light_rail'), osm('train'), osm('piste'), osm(None)) == ('bus', 'tram', 'rail', None, None)
+    assert (source('3'), source('700'), source('109'), source('900'), source('401'), source('1300')) == (
+        'bus', 'bus', 'rail', 'tram', 'metro', 'aerialway')
+    assert (source('1500'), source('x'), source(None)) == (None, None, None)
+
+
+BERN = ['B1', 'B2', 'B3', 'B4', 'B5']
+THUN = ['T1', 'T2', 'T3', 'T4', 'T5']
+
+
+def test_year_ignored_route_id_of_a_line_elsewhere_is_refused_and_the_stops_find_the_line():
+    links = _link_lines(
+        [('92-21-B-j26-1', '21', '700', [THUN, THUN[::-1]]), ('92-21-j26-1', '21', '700', [BERN, BERN[::-1]])],
+        # Bern's bus 21 still carries the 2021 ID, which now belongs to Thun's bus 21.
+        [('bern-21', '21', 'bus', '92-21-B-j21-1', BERN)],
+    )
+    assert links == {'bern-21': ('92-21-j26-1', 'line_number_and_stops')}
+
+
+def test_year_ignored_route_id_needs_the_same_number_and_a_shared_stop():
+    gtfs = [('92-36-D-j26-1', '36', '700', [BERN])]
+    assert _link_lines(gtfs, [('a', '36', 'bus', '92-36-D-j22-1', BERN[:1] + THUN)]) == {
+        'a': ('92-36-D-j26-1', 'normalized_gtfs_route_id')}
+    assert _link_lines(gtfs, [('a', '92', 'bus', '92-36-D-j22-1', BERN)]) == {}
+    assert _link_lines(gtfs, [('a', '36', 'bus', '92-36-D-j22-1', THUN)]) == {}
+    # A refused ID no longer blocks the OSM line with the same ID that runs there.
+    links = _link_lines(gtfs, [('a', '36', 'bus', '92-36-D-j21-1', THUN), ('b', '36', 'bus', '92-36-D-j24-1', BERN)])
+    assert links == {'b': ('92-36-D-j26-1', 'normalized_gtfs_route_id')}
+
+
+def test_stop_fallback_needs_the_same_number_and_mode():
+    gtfs = [('92-3-j26-1', '3', '700', [BERN]), ('92-N3-j26-1', 'N3', '705', [BERN]), ('91-9-j26-1', '9', '900', [THUN])]
+    links = _link_lines(gtfs, [('night', 'N 3', 'bus', None, BERN), ('day', '3', 'bus', None, BERN),
+                               ('bus-9', '9', 'bus', None, THUN), ('no-ref', None, 'bus', None, THUN)])
+    assert links == {'night': ('92-N3-j26-1', 'line_number_and_stops'), 'day': ('92-3-j26-1', 'line_number_and_stops')}
+
+
+def test_stop_fallback_needs_four_shared_stops_and_the_itinerary_ratio():
+    gtfs = [('92-5-j26-1', '5', '700', [BERN[:3]]), ('92-6-j26-1', '6', '700', [BERN + THUN])]
+    # Three shared stops are too few; 7 of 10 stops in order is a ratio of 0.7.
+    links = _link_lines(gtfs, [('short', '5', 'bus', None, BERN[:3]), ('partial', '6', 'bus', None, BERN + THUN[:2])])
+    assert links == {}
+    assert _link_lines(gtfs, [('partial', '6', 'bus', None, BERN + THUN[:3])]) == {
+        'partial': ('92-6-j26-1', 'line_number_and_stops')}
+    assert _link_lines(gtfs, [('partial', '6', 'bus', None, BERN + THUN[:3])], min_stop_ratio=0.9) == {}
+
+
+def test_stop_fallback_refuses_a_line_without_a_clear_best_candidate():
+    # Two GTFS route IDs for one line 400 on the same stops; then scores 1.0 and 0.92.
+    gtfs = [('92-400-j26-1', '400', '700', [BERN]), ('92-400-A-j26-1', '400', '700', [BERN])]
+    assert _link_lines(gtfs, [('a', '400', 'bus', None, BERN)]) == {}
+    line = BERN + THUN + ['U1', 'U2']
+    gtfs = [('92-400-j26-1', '400', '700', [line]), ('92-400-A-j26-1', '400', '700', [line[:-2] + ['X', 'U2']])]
+    assert _link_lines(gtfs, [('a', '400', 'bus', None, line)]) == {}
+    # With a clear lead (1.0 against 0.57), the line is linked.
+    gtfs = [('92-400-j26-1', '400', '700', [BERN]), ('92-400-A-j26-1', '400', '700', [BERN[:4] + THUN[:3]])]
+    assert _link_lines(gtfs, [('a', '400', 'bus', None, BERN)]) == {'a': ('92-400-j26-1', 'line_number_and_stops')}
+    # Two OSM lines that both look like the GTFS line: neither is linked.
+    assert _link_lines(gtfs[:1], [('a', '400', 'bus', None, BERN), ('b', '400', 'bus', None, BERN)]) == {}
+
+
+def test_stop_fallback_never_takes_a_linked_line_or_settles_for_a_lookalike():
+    gtfs = [('92-7-j26-1', '7', '700', [BERN]), ('92-7-A-j26-1', '7', '700', [BERN[:4] + THUN[:1]])]
+    links = _link_lines(gtfs, [('tagged', '7', 'bus', '92-7-j26-1', BERN), ('copy', '7', 'bus', None, BERN)])
+    # The copy's best candidate is linked by ID, so it is not paired with the lookalike 92-7-A.
+    assert links == {'tagged': ('92-7-j26-1', 'exact_gtfs_route_id')}
