@@ -194,7 +194,7 @@ def refresh_swiss(
         snapshots['gtfs']['downloaded_at'] = (
             stages.get('gtfs_source', {}).get('source') or {}
         ).get('downloaded_at')
-        mapping_inputs = {'atlas': stages['atlas']['files'], 'gtfs': stages['gtfs']['files'], 'version': 2}
+        mapping_inputs = {'atlas': stages['atlas']['files'], 'gtfs': stages['gtfs']['files'], 'version': 3}
         mapping_reused = decide('gtfs_atlas', mapping_inputs)
         if mapping_reused:
             emit_stage_outcome('timetable.identities_routes', 'reused')

@@ -306,6 +306,36 @@ def test_swiss_itineraries_collapse_same_uic_sequence_and_keep_sloid_variants(tm
     assert json.loads(first_stop['source_stop_key_variants']) == ['ch:1:sloid:A', 'ch:1:sloid:C']
 
 
+def test_swiss_stop_calls_take_the_station_number_from_didok_for_sloid_stop_ids(tmp_path):
+    # A trip without a planned pier calls at the station's SLOID, which names no platform.
+    stop_times_path = tmp_path / "trip_stop_times.csv"
+    pd.DataFrame([
+        {'trip_id': 'trip-1', 'stop_id': 'ch:1:sloid:1075', 'stop_sequence': 1},
+        {'trip_id': 'trip-1', 'stop_id': 'ch:1:sloid:1079:0:2', 'stop_sequence': 2},
+        {'trip_id': 'trip-1', 'stop_id': '8501080:0:1', 'stop_sequence': 3},
+    ]).to_csv(stop_times_path, index=False)
+    gtfs_data = {
+        'trip_stop_times_path': str(stop_times_path),
+        'trips': pd.DataFrame([{'trip_id': 'trip-1', 'route_id': 'R1', 'direction_id': '0', 'trip_headsign': 'End',
+                                'trip_short_name': None, 'shape_id': None}]),
+        'stops': pd.DataFrame([
+            {'stop_id': 'ch:1:sloid:1075', 'stop_name': 'Lausanne-Ouchy (lac)', 'platform_code': None,
+             'original_stop_id': 'ch:1:sloid:1075', 'location_type': None, 'parent_station': None, 'didok': 8501075},
+            {'stop_id': 'ch:1:sloid:1079:0:2', 'stop_name': 'Pully (lac)', 'platform_code': '2',
+             'original_stop_id': 'ch:1:sloid:1079:0:2', 'location_type': None, 'parent_station': None, 'didok': 8501079},
+            {'stop_id': '8501080:0:1', 'stop_name': 'Lutry (lac)', 'platform_code': '1',
+             'original_stop_id': '8501080:0:1', 'location_type': None, 'parent_station': None, 'didok': None},
+        ]),
+    }
+    integrated = pd.DataFrame([{'stop_id': 'ch:1:sloid:1079:0:2', 'sloid': 'ch:1:sloid:1079:0:2', 'match_method': 'original_stop_id'}])
+
+    _, stop_calls_df = _build_itinerary_frames(gtfs_data, integrated)
+
+    calls = stop_calls_df.sort_values(by='stop_sequence')
+    assert list(calls['station_ref']) == ['8501075', '8501079', '8501080']
+    assert calls.iloc[0]['source_stop_key'] is None or pd.isna(calls.iloc[0]['source_stop_key'])
+
+
 def test_swiss_itineraries_keep_distinct_patterns_when_headsign_missing(tmp_path):
     stop_times_path = tmp_path / "trip_stop_times.csv"
     pd.DataFrame([

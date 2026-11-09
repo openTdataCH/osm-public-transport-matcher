@@ -178,7 +178,9 @@ def _build_source_stop_call_row(
             stop.get('platform_code') if stop else None,
             source_stop_id,
         ),
-        'station_ref': _first_non_empty(row.get('station_ref'), stop.get('station_ref') if stop else None),
+        # A resolved stop's own station comes first: the feed can file a platform
+        # under a neighbouring station, as Swiss GTFS does Zürich HB SZU under Zürich HB.
+        'station_ref': _first_non_empty(stop.get('station_ref') if stop else None, row.get('station_ref')),
         'platform_code': _to_text(row.get('platform_code')),
         'stop_lat': stop_lat,
         'stop_lon': stop_lon,
@@ -693,9 +695,11 @@ _MODE_BY_GTFS_EXTENDED_TYPE = (
     (900, 999, 'tram'), (1000, 1099, 'ferry'), (1200, 1299, 'ferry'), (1300, 1399, 'aerialway'),
     (1400, 1499, 'funicular'),
 )
-# A line linked by number and stops needs this many shared stops, and its
-# score must lead the next candidate's by this margin, on both sides.
+# A line linked by number and stops shares this many stops, or every stop of
+# the line that has fewer, but never fewer than two; its score must lead the
+# next candidate's by this margin, on both sides.
 _LINE_FALLBACK_MIN_SHARED_STOPS = 4
+_LINE_FALLBACK_FEWEST_SHARED_STOPS = 2
 _LINE_FALLBACK_MIN_MARGIN = 0.1
 
 
@@ -751,6 +755,11 @@ class _LineEvidence:
         mode = self._modes.get(family_id)
         return mode is not None and mode == self._modes.get(other_id) and self.same_line_number(family_id, other_id)
 
+    def required_shared_stops(self, family_id: int, other_id: int) -> int:
+        """Four stops, or every stop of the line with fewer, as a two-station cableway; never fewer than two."""
+        fewest = min(len(self.stop_keys.get(family_id, ())), len(self.stop_keys.get(other_id, ())))
+        return max(_LINE_FALLBACK_FEWEST_SHARED_STOPS, min(_LINE_FALLBACK_MIN_SHARED_STOPS, fewest))
+
     def shares_a_stop(self, family_id: int, other_id: int) -> bool:
         return not self.stop_keys.get(family_id, set()).isdisjoint(self.stop_keys.get(other_id, set()))
 
@@ -787,7 +796,8 @@ def _link_lines_by_number_and_stops(source_families, osm_families, linked_source
     """Link the unlinked lines that choose each other by mode, line number and stops.
 
     A candidate of a line is a line of the other side with the same mode and
-    number that shares at least four stops; its score is ``line_score``. An
+    number that shares ``required_shared_stops``: four stops, or every stop of
+    the line that has fewer, but at least two. Its score is ``line_score``. An
     unlinked OSM line is linked to its best candidate when that source line is
     unlinked, the score reaches ``min_stop_ratio``, and each line leads the
     other's next candidate by the margin. Lines linked by route ID count as
@@ -805,7 +815,8 @@ def _link_lines_by_number_and_stops(source_families, osm_families, linked_source
                          for other_id in by_stop[other_side].get(key, ()))
         rows = []
         for other_id, shared_stops in shared.items():
-            if shared_stops >= _LINE_FALLBACK_MIN_SHARED_STOPS and evidence.comparable(family_id, other_id):
+            if (shared_stops >= evidence.required_shared_stops(family_id, other_id)
+                    and evidence.comparable(family_id, other_id)):
                 pair = (other_id, family_id) if other_side == 'source' else (family_id, other_id)
                 rows.append((evidence.line_score(*pair), other_id))
         return sorted(rows, key=lambda row: (-row[0], row[1]))

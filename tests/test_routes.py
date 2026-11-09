@@ -377,14 +377,38 @@ def test_stop_fallback_needs_the_same_number_and_mode():
     assert links == {'night': ('92-N3-j26-1', 'line_number_and_stops'), 'day': ('92-3-j26-1', 'line_number_and_stops')}
 
 
-def test_stop_fallback_needs_four_shared_stops_and_the_itinerary_ratio():
+def test_stop_fallback_needs_four_shared_stops_or_every_stop_of_a_shorter_line_and_the_itinerary_ratio():
     gtfs = [('92-5-j26-1', '5', '700', [BERN[:3]]), ('92-6-j26-1', '6', '700', [BERN + THUN])]
-    # Three shared stops are too few; 7 of 10 stops in order is a ratio of 0.7.
-    links = _link_lines(gtfs, [('short', '5', 'bus', None, BERN[:3]), ('partial', '6', 'bus', None, BERN + THUN[:2])])
-    assert links == {}
+    # 7 of 10 stops in order is a ratio of 0.7.
+    assert _link_lines(gtfs, [('partial', '6', 'bus', None, BERN + THUN[:2])]) == {}
     assert _link_lines(gtfs, [('partial', '6', 'bus', None, BERN + THUN[:3])]) == {
         'partial': ('92-6-j26-1', 'line_number_and_stops')}
     assert _link_lines(gtfs, [('partial', '6', 'bus', None, BERN + THUN[:3])], min_stop_ratio=0.9) == {}
+    # A line of three stops shares all three; one shared stop is never enough.
+    assert _link_lines(gtfs, [('short', '5', 'bus', None, BERN[:3])]) == {'short': ('92-5-j26-1', 'line_number_and_stops')}
+    assert _link_lines([('92-1-j26-1', '1', '700', [BERN[:1]])], [('one', '1', 'bus', None, BERN[:1])]) == {}
+
+
+def test_a_two_station_cableway_is_linked_by_its_number_and_both_stations():
+    # PB 2586 carries a route ID that is not in the timetable; its two stations are its only stops.
+    gtfs = [('93-258-6-j26-1', '2586', '1300', [['L1', 'L2'], ['L2', 'L1']])]
+    assert _link_lines(gtfs, [('pb-2586', '2586', 'aerialway', '93-8J-Y-j26-1', ['L1', 'L2'])]) == {
+        'pb-2586': ('93-258-6-j26-1', 'line_number_and_stops')}
+    assert _link_lines(gtfs, [('pb-2586', '2586', 'aerialway', None, ['L1', 'L3'])]) == {}
+    assert _link_lines(gtfs, [('pb-2586', '2586', 'funicular', None, ['L1', 'L2'])]) == {}
+
+
+def test_a_source_call_takes_its_resolved_stops_station_else_the_feeds():
+    from osm_public_transport_matcher.routes import _build_source_stop_call_row
+
+    lookup = {'atlas:szu': {'station_ref': '8503088'}}
+    # The feed files the SZU platform under Zürich HB; ATLAS has it at Zürich HB SZU.
+    resolved, _ = _build_source_stop_call_row(
+        {'itinerary_id': 'i', 'source_stop_key': 'atlas:szu', 'station_ref': '8503000'}, {'atlas:szu'}, lookup)
+    station_only, _ = _build_source_stop_call_row(
+        {'itinerary_id': 'i', 'source_stop_id': 'ch:1:sloid:1075', 'station_ref': '8501075'}, {'atlas:szu'}, lookup)
+    assert (resolved['station_ref'], station_only['station_ref']) == ('8503088', '8501075')
+    assert station_only['source_stop_key'] is None
 
 
 def test_stop_fallback_refuses_a_line_without_a_clear_best_candidate():

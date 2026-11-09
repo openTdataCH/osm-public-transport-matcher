@@ -86,6 +86,19 @@ def _parse_uic_from_gtfs_stop_id(stop_id: object) -> str | None:
     return prefix if prefix.isdigit() else None
 
 
+def _station_number(stop_id: object, original_stop_id: object, didok: object) -> str | None:
+    """The station number of a GTFS stop: the numeric prefix of its ID, else the feed's ``didok``.
+
+    Older Swiss stop IDs start with the number (``8501075:0:1``). SLOID stop IDs
+    do not (``ch:1:sloid:1075``), and the feed gives the number in ``didok``.
+    """
+    parsed = _parse_uic_from_gtfs_stop_id(original_stop_id) or _parse_uic_from_gtfs_stop_id(stop_id)
+    if parsed or didok is None or pd.isna(didok):
+        return parsed
+    text = str(didok).strip().removesuffix('.0')
+    return text if text.isdigit() else None
+
+
 def _itinerary_sequence_key(stop_id: str, sloid: object, original_stop_id: object) -> str:
     uic_number = _parse_uic_from_gtfs_stop_id(original_stop_id) or _parse_uic_from_gtfs_stop_id(stop_id)
     if uic_number:
@@ -139,6 +152,7 @@ def _build_stop_meta_lookup(gtfs_data) -> dict[str, dict[str, object]]:
     if not gtfs_data or not isinstance(gtfs_data, dict) or 'stops' not in gtfs_data:
         return {}
     columns = ['stop_id', 'stop_name', 'platform_code', 'original_stop_id', 'location_type', 'parent_station']
+    columns += [column for column in ('didok',) if column in gtfs_data['stops'].columns]
     stop_meta = gtfs_data['stops'][columns].drop_duplicates(subset=['stop_id'])
     return {
         str(row['stop_id']): row
@@ -189,7 +203,7 @@ def _build_itinerary_stop_info_lookup(
         sloid = match_row.get('sloid')
         has_sloid = pd.notna(sloid)
         original_stop_id = stop_meta.get('original_stop_id')
-        uic_number = _parse_uic_from_gtfs_stop_id(original_stop_id) or _parse_uic_from_gtfs_stop_id(stop_id)
+        uic_number = _station_number(stop_id, original_stop_id, stop_meta.get('didok'))
         stop_info_lookup[stop_id] = {
             'stop_id': stop_id,
             'sloid': sloid,
