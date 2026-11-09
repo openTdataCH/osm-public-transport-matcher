@@ -71,7 +71,7 @@ python -m pip install -e '.[swiss]'
 osm-public-transport-matcher swiss --source /path/to/stops_ATLAS.csv --osm /path/to/osm_data.xml --processed /path/to/processed --output /tmp/swiss-results
 ```
 
-Use `osm-public-transport-matcher --help` for acquisition and GTFS refresh options. Commands take explicit paths; the in-memory API never reads files, environment variables or credentials. Output directories must be new. Result writing validates a temporary bundle before publishing it.
+Use `osm-public-transport-matcher swiss --help` for acquisition and GTFS refresh options. Commands take explicit paths; the in-memory API never reads files, environment variables or credentials. Output directories must be new. Result writing validates a temporary bundle before publishing it.
 
 See [the result bundle format](documentation/Result%20bundle%20format.md) for the integration contract. The review application consumes that format without importing this package.
 

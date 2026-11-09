@@ -59,21 +59,21 @@ baseline is not an automatic part of a green build.
 
 1. Add a small failing example using `SourceStop` and `OsmNode` in `tests/`. Assert expected identity pairs, not only total counts. Include the ambiguous or negative case that could create a false positive.
 2. Edit or add a class in `src/osm_public_transport_matcher/core/predicates/`. Subclass `BasePredicate` and implement `run(ctx)`. Read candidates from `ctx.source` and `ctx.osm` and record accepted links with `ctx.commit(...)`.
-3. For a new public stage, register its factory in `api._predicates` and add its identifier to the desired profile's `predicate_names`. Record its inputs, assumptions and ordering below or in the module docstring.
+3. For a new matching rule, register its factory and its progress stage in `api._predicates` and add its identifier to the desired profile's `predicate_names`. Record its inputs, assumptions and ordering below or in the module docstring.
 4. Run the affected regression and the core suite. Preserve group propagation and candidate locks. Build reusable attribute indexes once per rule. Batch queries can contain candidates consumed by an earlier iteration; filter those candidates before committing. The 100-reference regression prevents repeated full OSM scans during reference matching.
 
 `ctx.commit` expands source duplicates and OSM pairs. The sides of a two-sided stop have their own predicate; never propagate a direct match to its middle. Station references intentionally support one-to-many and many-to-one links. Changing these allocation rules requires explicit regression cases.
 
-Name a stage and its match types after the evidence they use, and give each branch that decides differently its own match type, so a match type tells a reviewer how a pair was found.
+Name a matching rule and its match types after the evidence they use, and give each branch that decides differently its own match type, so a match type tells a reviewer how a pair was found.
 
-| Stage identifier | Inputs and assumptions | Default position |
+| Rule identifier | Inputs and assumptions | Default position |
 |---|---|---|
-| `identifier` | A profile `IdentifierRule`: OSM tags, such as `ref:sloid`, whose value equals one source stop's reference; within the long-distance cap. Elements kept only for their identifier are linked after all stages. | First, so that no weaker evidence gives a tagged element to another stop. Later stages skip their station-level shortcuts where it linked part of a station. |
+| `identifier` | A profile `IdentifierRule`: OSM tags, such as `ref:sloid`, whose value equals one source stop's reference; within the long-distance cap. Elements kept only for their identifier are linked after all rules. | First, so that no weaker evidence gives a tagged element to another stop. Later rules skip their station-level shortcuts where it linked part of a station. |
 | `two_sided_stop` | Profile-approved station references; two source stops, the two sides and the middle of a PTv2 two-sided stop. | Before reference matching, which would see the stop as one element. |
 | `reference` | A profile rule with compatible reference namespace, scope and OSM tag. Platform codes refine station candidates. | Before weaker evidence. |
 | `name` | Exact source name against OSM name/UIC-name/GTFS-name; platform code can disambiguate. | Before GTFS route/distance. |
 | `gtfs_route` | Scoped GTFS route IDs and direction IDs, or direction labels; mutual unique best candidate. Where a candidate carries the stop's platform code, candidates labelled with another platform are left out. | Before distance. |
-| `group_distance` | Name or approved station groups; maximum-cardinality assignment under the distance cap. | First distance stage. |
+| `group_distance` | Name or approved station groups; maximum-cardinality assignment under the distance cap. | First distance rule. |
 | `group_long_distance` | Same evidence under the profile's longer cap. | After `group_distance`. |
 | `local_ref_distance` | Equal platform code and `local_ref` within the normal distance cap. | Before nearest-only rules. |
 | `distance_only_candidate`, `distance_ratio`, `distance_only_candidate_second_pass` | Spatial candidates and compatible platform codes; only candidate or sufficient separation from the second candidate. | Last, in that order. |
@@ -82,7 +82,7 @@ Name equality alone can be ambiguous across cities. The generic profile caps nam
 
 ## Support another dataset
 
-Start with an external adapter that returns `adapters.base.AdapterResult`: `SourceStop` records and optionally a `SourceState` with explicit duplicate groups and route evidence. It does not need registration inside `osm_public_transport_matcher`. Keep source IDs as strings and select a stable namespace without a colon. Preserve source-specific fields under namespaced `extensions`; core predicates must not require them.
+Start with an external adapter that returns `adapters.base.AdapterResult`: a `SourceState` of `SourceStop` records, optionally with explicit duplicate groups and route evidence. It does not need registration inside `osm_public_transport_matcher`. Keep source IDs as strings and select a stable namespace without a colon. Preserve source-specific fields under namespaced `extensions`; core predicates must not require them.
 
 Use existing GTFS parsing when possible. Add a profile with reference mappings, thresholds and any grouping policy. Never infer that equal stop IDs or route IDs from different feeds mean the same entity. If an OSM extract's unscoped GTFS tags are assigned to a feed, make that adapter configuration explicit.
 
