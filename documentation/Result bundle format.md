@@ -76,7 +76,7 @@ Rows refer to entities by key, never by position.
 
 ## Matches and unmatched entities
 
-- A match links two existing entities and has a finite, non-negative `distance_m` in metres. `method` is the [match type](https://github.com/openTdataCH/stop_sync_osm_atlas/blob/main/documentation/0.1%20Glossary.md#match-type): the rule and branch that decided the match, such as `uic_reference_local_ref` or `gtfs_shared_route` ([E2](2.%20Matching%20process.md#the-matching-rules)).
+- A match links two existing entities and has a finite, non-negative `distance_m` in metres. `method` is the [match type](https://github.com/openTdataCH/stop_sync_osm_atlas/blob/main/documentation/0.5%20Glossary.md#match-type): the rule and branch that decided the match, such as `uic_reference_local_ref` or `gtfs_shared_route` ([E2](2.%20Matching%20process.md#the-matching-rules)).
 - An entity can have several matches when the profile allows it, but the same pair never appears twice.
 - Every entity appears either in `matches` or in `unmatched`, never in both and never in neither.
 - `isolated` is true when no element of the other side lies within the profile's isolation radius.

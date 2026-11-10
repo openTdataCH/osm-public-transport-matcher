@@ -23,6 +23,7 @@ Changes to the [result bundle contract](Result%20bundle%20format.md) are recorde
 
 ### Inputs
 
+- **One Swiss boundary filter** — ATLAS and GTFS stops pass the same shapely test in `adapters/geo_utils.py`: inside the boundary or on its edge. GeoPandas is no longer a dependency. Acquisition downloads the boundary on every run and keeps the cached copy when a download fails or does not read as a polygon; before, it downloaded the file once and never refreshed it.
 - **Platform ways with a SLOID** — The Overpass query also downloads ways with `ref:sloid` or `railway:ref:sloid`, and `read_osm()` keeps those that are not stops in their own right as `identifier_only` elements. They are linked only by their identifier, after all rules, as extra elements that take no stop away from another. See [E1.3](1.3%20OSM%20data.md#stop-identifiers).
 
 ### Results and operations

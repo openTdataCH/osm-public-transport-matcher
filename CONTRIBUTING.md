@@ -44,7 +44,7 @@ necessary for dynamic imports and runtime effects.
 
 For a result-format or producer/consumer change, update [the wire reference](documentation/Result%20bundle%20format.md),
 the relevant fixtures, and both sides' compatibility tests. From the sibling app
-checkout, run `make quality ENGINE_ROOT=../engine` to include independent consumer
+checkout, run `make quality` to include independent consumer
 validation and PostGIS publication checks. The engine's own command cannot
 establish consumer compatibility or database rollback safety. Use the application
 quality workflow to review combined structural debt and coverage trends.

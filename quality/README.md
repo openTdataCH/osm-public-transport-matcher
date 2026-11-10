@@ -219,8 +219,8 @@ exit as proof that every mutation was killed. Configuration details are in the
 
 ## Cross-repository verification and the application dashboard
 
-From the sibling application checkout, `make quality ENGINE_ROOT=../engine`
-provides the supported Python 3.13/Node 22/PostGIS environment. It uses separate
+From the sibling application checkout, `make quality` (which finds this checkout at
+`../engine`, or at `ENGINE_DIR`) provides the supported Python 3.13/Node 22/PostGIS environment. It uses separate
 app and engine interpreters, runs both suites, and exercises the producer CLI
 against the independently implemented consumer for GTFS and Swiss fixture
 modes. App-only tests use checked-in result bytes without importing the engine.
@@ -235,7 +235,7 @@ full command to collect current cross-repository evidence.
 The app full run clears its raw directory before collection. To include an
 independently collected mutation sample, finish the full run first, then copy
 `engine-mutation.json` into the app's `quality/raw` directory and regenerate the
-app report with `python scripts/quality.py report --engine-root ../engine` in its
+app report with `python scripts/quality.py report` in its
 supported Python environment. The consumer checks the sample's source/test
 hashes and requires a start time within the last seven days, allowing five
 minutes of clock skew. Missing, changed, or old evidence is displayed as unmeasured,
