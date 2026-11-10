@@ -80,7 +80,7 @@ def iter_trip_patterns(path):
                 yield trip_id, {'stop_id': stop_ids, 'stop_sequence': sequences}, trip_count
 
 
-def load_gtfs_columnar(gtfs_folder, *, stop_selector=None, stage_dir):
+def load_gtfs_columnar(gtfs_folder, *, stop_selector, stage_dir):
     folder, work = Path(gtfs_folder), Path(stage_dir)
     work.mkdir(parents=True, exist_ok=True)
     with stage('gtfs.metadata'):

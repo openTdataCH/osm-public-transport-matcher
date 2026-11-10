@@ -16,7 +16,7 @@ def sources(tmp_path, monkeypatch):
     monkeypatch.setattr(acquisition, 'get_current_gtfs_permalink', lambda: 'https://example.com/gtfs.zip')
     monkeypatch.setattr(acquisition, 'probe_remote_source', lambda label, url: {
         'label': label, 'url': url, 'probe_ok': True, 'etag': versions[label]})
-    monkeypatch.setattr(acquisition, '_ensure_swiss_geojson_cache', lambda path, **kw: Path(path).write_text('{}'))
+    monkeypatch.setattr(acquisition, 'download_boundary', lambda path, url: Path(path).write_text('{}'))
     import osm_public_transport_matcher.swiss
     monkeypatch.setattr(osm_public_transport_matcher.swiss, '_boundary_selector', lambda path: lambda frame: frame.copy())
 

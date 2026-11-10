@@ -10,7 +10,7 @@ import datetime
 from typing import Optional
 
 
-from .geo_utils import filter_points_in_switzerland
+from .geo_utils import inside_boundary, load_boundary
 from osm_public_transport_matcher.profiles.switzerland import normalize_route_id
 
 
@@ -521,7 +521,7 @@ def get_current_gtfs_permalink(year: Optional[int] = None, locale: str = "en") -
     return f"https://data.opentransportdata.swiss/{locale}/dataset/timetable-{target_year}-gtfs2020/permalink"
 
 
-def get_atlas_stops(output_path, download_url, *, boundary_geojson=None):
+def get_atlas_stops(output_path, download_url, *, boundary_geojson):
     """Download and process ATLAS stops data.
 
     Returns:
@@ -545,10 +545,14 @@ def get_atlas_stops(output_path, download_url, *, boundary_geojson=None):
     df = df[df['uicCountryCode'] == 85]
     after_country = len(df)
 
-    # ── Step 2: Geography filter (inside Swiss border polygon) ──────
-    geography_options = {'boundary_geojson': str(boundary_geojson)} if boundary_geojson is not None else {}
-    df = filter_points_in_switzerland(df, lat_col='wgs84North', lon_col='wgs84East', **geography_options)
+    # ── Step 2: Geography filter (inside the boundary or on its edge) ──
+    # Rows without numeric coordinates are dropped here and count as outside.
+    df = df.assign(wgs84North=pd.to_numeric(df['wgs84North'], errors='coerce'),
+                   wgs84East=pd.to_numeric(df['wgs84East'], errors='coerce'))
+    df = df.dropna(subset=['wgs84North', 'wgs84East'])
+    df = df[inside_boundary(load_boundary(boundary_geojson), df['wgs84North'], df['wgs84East'])]
     after_geo = len(df)
+    print(f"ATLAS: kept {after_geo:,} rows inside the boundary (from {after_country:,})")
 
     # ── Step 3: Validity filter (validTo >= today) ──────────────────
     # Note: pandas datetime64[ns] cannot represent years > 2262,

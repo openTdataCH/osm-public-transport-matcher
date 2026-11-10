@@ -15,10 +15,9 @@ from osm_public_transport_matcher.progress import emit_stage_outcome, progress_s
 from .get_atlas_data import ATLAS_ACTUAL_DATE_RESOURCE_PERMALINK, get_atlas_stops, get_current_gtfs_permalink
 from .get_atlas_gtfs import download_and_extract_gtfs
 from osm_public_transport_matcher.acquisition.overpass import osm_base_time, query_overpass
-from .geo_utils import _ensure_swiss_geojson_cache
+from .geo_utils import SWISS_BOUNDARY_URL, download_boundary
 from .source_freshness import probe_remote_source, source_snapshot_is_unchanged
 
-SWISS_BOUNDARY_URL = 'https://raw.githubusercontent.com/ZHB/switzerland-geojson/master/country/switzerland.geojson'
 _CACHE_FILES = (
     'raw/stops_ATLAS.csv',
     'processed/source_routes.csv',
@@ -107,7 +106,13 @@ def refresh_swiss(
             'gtfs': probe_remote_source('GTFS', gtfs_url),
         }
         boundary = raw / 'switzerland.geojson'
-        _ensure_swiss_geojson_cache(str(boundary), download_url=boundary_url)
+        # Refreshed on every run; a failed download keeps the last copy that read as a boundary.
+        try:
+            download_boundary(boundary, boundary_url)
+        except RuntimeError as exc:
+            if not boundary.exists():
+                raise
+            print(f'Keeping the cached Swiss boundary: {exc}', flush=True)
         boundary_fingerprint = _sha256(boundary)
     from osm_public_transport_matcher.swiss import _load_gtfs_products, _map_gtfs_products
     from .gtfs_columnar import CACHE_VERSION, read_cache, write_cache

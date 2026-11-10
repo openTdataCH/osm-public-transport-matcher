@@ -8,14 +8,10 @@ import pandas as pd
 import shutil
 from typing import Dict, Set
 
-from .geo_utils import filter_points_in_switzerland
-
 
 COORD_PROXIMITY_MAX_DISTANCE_M = 0.5
 _COORD_BUCKET_METERS_PER_DEG_LAT = 111_320.0
 _COORD_BUCKET_METERS_PER_DEG_LON = _COORD_BUCKET_METERS_PER_DEG_LAT * math.cos(math.radians(46.8))
-GTFS_DB_STOPS_CACHE_PATH = os.path.join('data', 'processed', 'gtfs_stops_raw.csv')
-GTFS_DB_STATE_CACHE_PATH = os.path.join('data', 'processed', 'gtfs_stop_identity_resolution.csv')
 GTFS_TRIP_STOP_TIMES_STAGE_FILENAME = 'swiss_trip_stop_times.csv'
 SWISS_UIC_PREFIX = '85'
 
@@ -286,24 +282,6 @@ def check_swiss_stops_found(swiss_stops: pd.DataFrame) -> None:
         )
 
 
-def _select_swiss_gtfs_stops(all_stops: pd.DataFrame) -> pd.DataFrame:
-    """Return Swiss GTFS stops using all known UIC/DIDOK identifier columns."""
-    check_swiss_stop_columns(all_stops)
-    swiss_uic_mask = (
-        all_stops['didok'].fillna('').astype(str).str.startswith(SWISS_UIC_PREFIX)
-        | all_stops['original_stop_id'].fillna('').astype(str).str.startswith(SWISS_UIC_PREFIX)
-        | all_stops['stop_id'].fillna('').astype(str).str.startswith(SWISS_UIC_PREFIX)
-    )
-    prefixed = all_stops[swiss_uic_mask].copy()
-    swiss_stops = filter_points_in_switzerland(prefixed, lat_col='stop_lat', lon_col='stop_lon')
-    check_swiss_stops_found(swiss_stops)
-    print(
-        f"GTFS: filtered to {len(swiss_stops):,} Swiss stops inside CH border "
-        f"(from {len(prefixed):,} Swiss UIC/DIDOK rows)"
-    )
-    return swiss_stops
-
-
 def download_and_extract_gtfs(gtfs_url, gtfs_folder="data/raw/gtfs"):
     """Download and extract GTFS data to a clean folder.
 
@@ -405,7 +383,7 @@ def _load_gtfs_metadata(gtfs_folder, stop_selector):
     all_stops['stop_lat'] = pd.to_numeric(all_stops['stop_lat'], errors='coerce')
     all_stops['stop_lon'] = pd.to_numeric(all_stops['stop_lon'], errors='coerce')
     all_stops['location_type'] = pd.to_numeric(all_stops['location_type'], errors='coerce').astype('Int64')
-    swiss_stops = stop_selector(all_stops) if stop_selector is not None else _select_swiss_gtfs_stops(all_stops)
+    swiss_stops = stop_selector(all_stops)
 
     # Load trips once; filter later to relevant_trip_ids found via stop_times streaming
     trip_columns = {
@@ -435,7 +413,7 @@ def _load_gtfs_metadata(gtfs_folder, stop_selector):
     return all_stops, swiss_stops, trips_all
 
 
-def load_gtfs_data_streaming(gtfs_folder: str, *, stop_selector=None, stage_dir=None):
+def load_gtfs_data_streaming(gtfs_folder: str, *, stop_selector, stage_dir=None):
     """Load GTFS data in a memory-lean streaming fashion.
 
     The pandas reference backend keeps memory bounded by:

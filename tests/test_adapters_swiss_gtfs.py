@@ -1,7 +1,6 @@
 import pytest
 import pandas as pd
 
-from osm_public_transport_matcher.adapters import get_atlas_gtfs as gtfs_mod
 from osm_public_transport_matcher.adapters.get_atlas_gtfs import parse_gtfs_stop_ids
 
 
@@ -33,41 +32,31 @@ def test_parse_gtfs_stop_ids_handles_empty_frame():
     assert 'uic_number' in parsed.columns
 
 
-def test_select_swiss_gtfs_stops_accepts_didok_for_sloid_stop_ids(monkeypatch):
-    monkeypatch.setattr(gtfs_mod, 'filter_points_in_switzerland', lambda df, **_kwargs: df)
+def _selector_around_switzerland_and_bavaria(tmp_path):
+    import json
+    from osm_public_transport_matcher.swiss import _boundary_selector
+    boundary = tmp_path / 'boundary.geojson'
+    boundary.write_text(json.dumps({'type': 'Polygon', 'coordinates': [[[5, 45], [12, 45], [12, 49], [5, 49], [5, 45]]]}))
+    return _boundary_selector(boundary)
 
-    selected = gtfs_mod._select_swiss_gtfs_stops(pd.DataFrame([
-        {
-            'stop_id': 'ch:1:sloid:10',
-            'original_stop_id': 'ch:1:sloid:10',
-            'didok': '8500010',
-            'stop_lat': 47.5474,
-            'stop_lon': 7.5896,
-        },
-        {
-            'stop_id': '8002140',
-            'original_stop_id': '8002140',
-            'didok': '8002140',
-            'stop_lat': 48.3654,
-            'stop_lon': 10.8856,
-        },
+
+def test_swiss_selector_accepts_didok_for_sloid_stop_ids(tmp_path):
+    # Both stops are inside the boundary; only the Swiss UIC number decides.
+    selected = _selector_around_switzerland_and_bavaria(tmp_path)(pd.DataFrame([
+        {'stop_id': 'ch:1:sloid:10', 'original_stop_id': 'ch:1:sloid:10', 'didok': '8500010',
+         'stop_lat': 47.5474, 'stop_lon': 7.5896},
+        {'stop_id': '8002140', 'original_stop_id': '8002140', 'didok': '8002140',
+         'stop_lat': 48.3654, 'stop_lon': 10.8856},
     ]))
 
     assert selected['stop_id'].tolist() == ['ch:1:sloid:10']
 
 
-def test_select_swiss_gtfs_stops_fails_clearly_when_no_swiss_identifiers(monkeypatch):
-    monkeypatch.setattr(gtfs_mod, 'filter_points_in_switzerland', lambda df, **_kwargs: df)
-
+def test_swiss_selector_fails_clearly_when_no_swiss_identifiers(tmp_path):
     with pytest.raises(RuntimeError, match='GTFS Swiss stop filter produced 0 stops'):
-        gtfs_mod._select_swiss_gtfs_stops(pd.DataFrame([
-            {
-                'stop_id': 'ch:1:sloid:10',
-                'original_stop_id': 'ch:1:sloid:10',
-                'didok': '',
-                'stop_lat': 47.5474,
-                'stop_lon': 7.5896,
-            }
+        _selector_around_switzerland_and_bavaria(tmp_path)(pd.DataFrame([
+            {'stop_id': 'ch:1:sloid:10', 'original_stop_id': 'ch:1:sloid:10', 'didok': '',
+             'stop_lat': 47.5474, 'stop_lon': 7.5896},
         ]))
 
 

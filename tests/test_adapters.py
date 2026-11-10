@@ -181,20 +181,38 @@ def test_swiss_fresh_gtfs_exports_identity_and_normalized_route_match_without_so
 
 def test_explicit_boundary_changes_between_runs_are_respected(tmp_path):
     import json
-    pytest.importorskip('geopandas')
-    from osm_public_transport_matcher.adapters.geo_utils import filter_points_in_switzerland
+    from osm_public_transport_matcher.adapters.geo_utils import inside_boundary, load_boundary
     boundary = tmp_path / 'boundary.geojson'
-    frame = pd.DataFrame([{'lat': 0.5, 'lon': 0.5}, {'lat': 3.5, 'lon': 3.5}])
+    frame = pd.DataFrame([{'lat': 0.5, 'lon': 0.5}, {'lat': 3.5, 'lon': 3.5}, {'lat': 1.0, 'lon': 0.5}])
     def write_square(start):
         boundary.write_text(json.dumps({'type': 'Polygon', 'coordinates': [[
             [start, start], [start + 1, start], [start + 1, start + 1], [start, start + 1], [start, start],
         ]]}))
     write_square(0)
-    first = filter_points_in_switzerland(frame, 'lat', 'lon', boundary_geojson=str(boundary))
+    # A point on the edge counts as inside.
+    assert inside_boundary(load_boundary(boundary), frame['lat'], frame['lon']).tolist() == [True, False, True]
     write_square(3)
-    second = filter_points_in_switzerland(frame, 'lat', 'lon', boundary_geojson=str(boundary))
-    assert first['lat'].tolist() == [0.5]
-    assert second['lat'].tolist() == [3.5]
+    assert inside_boundary(load_boundary(boundary), frame['lat'], frame['lon']).tolist() == [False, True, False]
+
+
+def test_boundary_download_keeps_the_last_copy_unless_the_new_one_reads_as_a_boundary(tmp_path, monkeypatch):
+    import json
+    import requests
+    from osm_public_transport_matcher.adapters.geo_utils import download_boundary, load_boundary
+    square = {'type': 'Polygon', 'coordinates': [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]}
+    path = tmp_path / 'raw' / 'switzerland.geojson'
+    def serve(content):
+        response = requests.Response()
+        response.status_code, response._content = 200, content
+        monkeypatch.setattr(requests, 'get', lambda url, timeout: response)
+    serve(json.dumps(square).encode())
+    download_boundary(path, 'https://example.com/b.geojson')
+    assert load_boundary(path).bounds == (0, 0, 1, 1)
+    serve(b'{"type": "Point", "coordinates": [0, 0]}')
+    with pytest.raises(RuntimeError, match='not a polygon'):
+        download_boundary(path, 'https://example.com/b.geojson')
+    assert load_boundary(path).bounds == (0, 0, 1, 1)
+    assert not path.with_name('switzerland.geojson.part').exists()
 
 
 def test_swiss_example_matches_expected_decisions():

@@ -32,28 +32,24 @@ def timetable_line_number(ref: str) -> str | None:
 
 
 def _boundary_selector(path: Path):
-    from shapely.geometry import shape
-    from shapely import covers, points
-    from shapely.ops import unary_union
-    from osm_public_transport_matcher.adapters.get_atlas_gtfs import check_swiss_stop_columns, check_swiss_stops_found
-    data = json.loads(path.read_text(encoding='utf-8'))
-    if data['type'] == 'FeatureCollection':
-        polygon = unary_union([shape(item['geometry']) for item in data['features']])
-    elif data['type'] == 'Feature':
-        polygon = shape(data['geometry'])
-    else:
-        polygon = shape(data)
+    """Select the GTFS stops with a Swiss UIC/DIDOK number that lie inside the boundary or on its edge."""
+    from osm_public_transport_matcher.adapters.geo_utils import inside_boundary, load_boundary
+    from osm_public_transport_matcher.adapters.get_atlas_gtfs import (
+        SWISS_UIC_PREFIX, check_swiss_stop_columns, check_swiss_stops_found,
+    )
+    boundary = load_boundary(path)
     def select(frame):
         check_swiss_stop_columns(frame)
-        valid = frame.dropna(subset=['stop_lat', 'stop_lon']).copy()
-        prefixes = (
-            valid['didok'].fillna('').astype(str).str.startswith('85')
-            | valid['original_stop_id'].fillna('').astype(str).str.startswith('85')
-            | valid['stop_id'].fillna('').astype(str).str.startswith('85')
+        valid = frame.dropna(subset=['stop_lat', 'stop_lon'])
+        swiss_number = (
+            valid['didok'].fillna('').astype(str).str.startswith(SWISS_UIC_PREFIX)
+            | valid['original_stop_id'].fillna('').astype(str).str.startswith(SWISS_UIC_PREFIX)
+            | valid['stop_id'].fillna('').astype(str).str.startswith(SWISS_UIC_PREFIX)
         )
-        valid = valid[prefixes].copy()
-        selected = valid[covers(polygon, points(valid['stop_lon'].to_numpy(dtype=float), valid['stop_lat'].to_numpy(dtype=float)))].copy()
+        valid = valid[swiss_number]
+        selected = valid[inside_boundary(boundary, valid['stop_lat'], valid['stop_lon'])].copy()
         check_swiss_stops_found(selected)
+        print(f"GTFS: kept {len(selected):,} stops inside the boundary (from {len(valid):,} with a Swiss UIC/DIDOK number)")
         return selected
     return select
 

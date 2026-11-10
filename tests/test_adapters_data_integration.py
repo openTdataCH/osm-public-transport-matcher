@@ -216,6 +216,14 @@ def test_atlas_actual_date_permalink_targets_v2_csv_resource():
     )
 
 
+def _swiss_box(tmp_path):
+    """A boundary file around Switzerland, for tests that do not test the boundary itself."""
+    import json
+    path = tmp_path / "boundary.geojson"
+    path.write_text(json.dumps({"type": "Polygon", "coordinates": [[[5, 45], [11, 45], [11, 48], [5, 48], [5, 45]]]}))
+    return path
+
+
 def test_get_atlas_stops_accepts_plain_csv_payload_with_bom(tmp_path):
     csv_payload = (
         "\ufeffsloid;uicCountryCode;validTo;trafficPointElementType;wgs84North;wgs84East\n"
@@ -227,11 +235,9 @@ def test_get_atlas_stops_accepts_plain_csv_payload_with_bom(tmp_path):
 
     output_path = tmp_path / "stops_ATLAS.csv"
 
-    with patch("osm_public_transport_matcher.adapters.get_atlas_data.requests.get", return_value=mocked_response), patch(
-        "osm_public_transport_matcher.adapters.get_atlas_data.filter_points_in_switzerland",
-        side_effect=lambda df, lat_col, lon_col: df,
-    ):
-        stats = get_atlas_stops(str(output_path), ATLAS_ACTUAL_DATE_RESOURCE_PERMALINK)
+    with patch("osm_public_transport_matcher.adapters.get_atlas_data.requests.get", return_value=mocked_response):
+        stats = get_atlas_stops(str(output_path), ATLAS_ACTUAL_DATE_RESOURCE_PERMALINK,
+                                boundary_geojson=_swiss_box(tmp_path))
 
     written = pd.read_csv(output_path, sep=";")
 
@@ -248,11 +254,9 @@ def test_get_atlas_stops_names_missing_required_columns_and_warns_about_expected
         response = MagicMock()
         response.content = csv_text.encode("utf-8")
         response.raise_for_status.return_value = None
-        with patch("osm_public_transport_matcher.adapters.get_atlas_data.requests.get", return_value=response), patch(
-            "osm_public_transport_matcher.adapters.get_atlas_data.filter_points_in_switzerland",
-            side_effect=lambda df, lat_col, lon_col: df,
-        ):
-            return get_atlas_stops(str(tmp_path / "stops_ATLAS.csv"), ATLAS_ACTUAL_DATE_RESOURCE_PERMALINK)
+        with patch("osm_public_transport_matcher.adapters.get_atlas_data.requests.get", return_value=response):
+            return get_atlas_stops(str(tmp_path / "stops_ATLAS.csv"), ATLAS_ACTUAL_DATE_RESOURCE_PERMALINK,
+                                   boundary_geojson=_swiss_box(tmp_path))
 
     with pytest.raises(ValueError, match=re.escape("ATLAS CSV lacks required columns: ['uicCountryCode']")):
         run("sloid;validTo;wgs84North;wgs84East\nch:1:sloid:1;9999-12-31;47.0;8.0\n")

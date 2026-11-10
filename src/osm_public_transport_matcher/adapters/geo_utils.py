@@ -1,151 +1,57 @@
-"""Geospatial utilities for Swiss border filtering."""
-import os
+"""The Swiss boundary: download it, read it and select the points inside it."""
+from __future__ import annotations
+
 import json
-import pandas as pd
+import os
+from pathlib import Path
 
-try:
-    import geopandas as gpd  # type: ignore
-    from shapely.geometry import Polygon, MultiPolygon, shape  # type: ignore
-    from shapely.ops import unary_union  # type: ignore
-    _HAS_GPD = True
-except Exception:
-    gpd = None  # type: ignore
-    Polygon = None  # type: ignore
-    MultiPolygon = None  # type: ignore
-    shape = None  # type: ignore
-    unary_union = None  # type: ignore
-    _HAS_GPD = False
+import numpy as np
+
+SWISS_BOUNDARY_URL = 'https://raw.githubusercontent.com/ZHB/switzerland-geojson/master/country/switzerland.geojson'
 
 
-def _ensure_swiss_geojson_cache(geojson_path: str, *, download_url: str | None = None) -> None:
-    """Ensure the Switzerland GeoJSON cache exists at geojson_path.
-
-    Downloads from SWISS_GEOJSON_URL if missing.
-    """
+def download_boundary(path: str | Path, url: str = SWISS_BOUNDARY_URL) -> None:
+    """Download the boundary to ``path``, replacing the previous copy only with one that reads as a boundary."""
     import requests
-    
-    if os.path.exists(geojson_path):
-        return
-    url_default = "https://raw.githubusercontent.com/ZHB/switzerland-geojson/master/country/switzerland.geojson"
-    url = download_url or os.getenv("SWISS_GEOJSON_URL", url_default)
-    os.makedirs(os.path.dirname(geojson_path), exist_ok=True)
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_name(path.name + '.part')
     try:
-        print(f"Downloading Switzerland boundary GeoJSON from {url} …")
-        resp = requests.get(url, timeout=60)
-        resp.raise_for_status()
-        with open(geojson_path, "wb") as f:
-            f.write(resp.content)
-        print(f"Saved Switzerland boundary to {geojson_path}")
+        response = requests.get(url, timeout=60)
+        response.raise_for_status()
+        partial.write_bytes(response.content)
+        load_boundary(partial)
     except Exception as exc:
-        raise RuntimeError(f"Failed to download Switzerland GeoJSON from {url}: {exc}")
+        partial.unlink(missing_ok=True)
+        raise RuntimeError(f'Failed to download the Swiss boundary from {url}: {exc}') from exc
+    os.replace(partial, path)
 
-def _load_swiss_polygon(boundary_geojson: str | None = None):
-    """Load precise Switzerland polygon from cached GeoJSON.
 
-    Returns shapely (Multi)Polygon. Raises if cache is missing or invalid.
-    """
-    osm_cache_file = boundary_geojson or os.getenv('SWISS_GEOJSON_PATH', 'data/raw/switzerland.geojson')
-    if not _HAS_GPD:
-        raise RuntimeError("GeoPandas is required for Swiss border filtering. Please install geopandas and shapely.")
+def load_boundary(path: str | Path):
+    """Read a GeoJSON polygon; the geometries of a FeatureCollection are joined into one."""
+    from shapely.geometry import MultiPolygon, Polygon, shape
+    from shapely.ops import unary_union
 
-    if not os.path.exists(osm_cache_file):
-        # Attempt to fetch automatically if missing
-        _ensure_swiss_geojson_cache(osm_cache_file)
+    data = json.loads(Path(path).read_text(encoding='utf-8'))
+    kind = data.get('type') if isinstance(data, dict) else None
+    if kind == 'FeatureCollection':
+        geometries = [shape(feature['geometry']) for feature in data.get('features', []) if feature.get('geometry')]
+        if not geometries:
+            raise ValueError('The boundary FeatureCollection has no geometries')
+        boundary = geometries[0] if len(geometries) == 1 else unary_union(geometries)
+    elif kind == 'Feature':
+        boundary = shape(data['geometry'])
+    else:
+        boundary = shape(data)
+    if not isinstance(boundary, (Polygon, MultiPolygon)):
+        raise ValueError(f'The boundary is a {boundary.geom_type}, not a polygon')
+    return boundary
 
-    try:
-        print("Loading Switzerland boundary from cache…")
-        with open(osm_cache_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
 
-        geom_union = None
-        if isinstance(data, dict):
-            t = data.get("type")
-            if t == "FeatureCollection":
-                geoms = []
-                for feature in data.get("features", []):
-                    geom_obj = feature.get("geometry") if isinstance(feature, dict) else None
-                    if geom_obj:
-                        geoms.append(shape(geom_obj))
-                if not geoms:
-                    raise RuntimeError("No geometries found in FeatureCollection")
-                geom_union = geoms[0] if len(geoms) == 1 else unary_union(geoms)
-            elif t == "Feature":
-                geom_obj = data.get("geometry")
-                if not geom_obj:
-                    raise RuntimeError("Feature has no geometry")
-                geom_union = shape(geom_obj)
-            elif t in ("Polygon", "MultiPolygon", "GeometryCollection"):
-                geom_union = shape(data)
-            else:
-                raise RuntimeError(f"Unsupported GeoJSON type: {t}")
-        else:
-            raise RuntimeError("Invalid GeoJSON content")
+def inside_boundary(boundary, lat, lon) -> np.ndarray:
+    """For each point, whether it lies inside the boundary or on its edge."""
+    import shapely
 
-        if not isinstance(geom_union, (Polygon, MultiPolygon)):
-            raise RuntimeError(f"Unexpected geometry type for Switzerland boundary: {type(geom_union)}")
-
-        print("Successfully loaded Switzerland boundary from cache")
-        return geom_union
-    except Exception as exc:
-        try:
-            if gpd is None:
-                raise RuntimeError(str(exc))
-            print("GeoJSON parse failed, attempting GeoPandas read as fallback…")
-            swiss_gdf = gpd.read_file(osm_cache_file)
-            if len(swiss_gdf) == 0:
-                raise RuntimeError("Empty Switzerland boundary data")
-            try:
-                geom_union = swiss_gdf.geometry.union_all()
-            except Exception:
-                geom_union = swiss_gdf.unary_union
-            if isinstance(geom_union, (Polygon, MultiPolygon)):
-                print("Successfully loaded Switzerland boundary via GeoPandas fallback")
-                return geom_union
-            raise RuntimeError(f"Unexpected geometry type for Switzerland boundary: {type(geom_union)}")
-        except Exception as exc2:
-            raise RuntimeError(f"Failed to load Switzerland boundary from cache: {exc2}")
-
-def filter_points_in_switzerland(df: pd.DataFrame, lat_col: str, lon_col: str, *, boundary_geojson: str | None = None) -> pd.DataFrame:
-    """Filter rows whose WGS84 coordinates lie inside Switzerland using the precise OSM polygon."""
-    # Basic cleanup
-    df = df.dropna(subset=[lat_col, lon_col]).copy()
-    df[lat_col] = pd.to_numeric(df[lat_col], errors='coerce')
-    df[lon_col] = pd.to_numeric(df[lon_col], errors='coerce')
-    df = df.dropna(subset=[lat_col, lon_col])
-
-    before = len(df)
-    if before == 0:
-        return pd.DataFrame(columns=df.columns)
-
-    swiss_poly = _load_swiss_polygon(boundary_geojson)
-    # Cheap bounding-box prefilter to reduce the number of points that GeoPandas needs to test.
-    # This preserves exact semantics because we still do the precise polygon test afterwards.
-    try:
-        minx, miny, maxx, maxy = swiss_poly.bounds  # (lon_min, lat_min, lon_max, lat_max)
-        df = df[
-            df[lon_col].between(minx, maxx, inclusive='both') &
-            df[lat_col].between(miny, maxy, inclusive='both')
-        ].copy()
-    except Exception:
-        # If bounds fail for any reason, fall back to the full dataset
-        pass
-
-    bbox_filtered = len(df)
-    if bbox_filtered == 0:
-        print(f"Swiss filter: bbox prefilter kept 0 (from {before:,} total)")
-        return pd.DataFrame(columns=df.columns)
-
-    # Accurate point-in-polygon on full dataset
-    try:
-        gdf = gpd.GeoDataFrame(
-            df,
-            geometry=gpd.points_from_xy(df[lon_col], df[lat_col], crs='EPSG:4326'),
-        )
-        # Keep points inside Switzerland or exactly on the border
-        inside_or_border = gdf.intersects(swiss_poly)
-        filtered = gdf[inside_or_border].drop(columns='geometry')
-        
-        print(f"Swiss filter: filter kept {len(filtered):,} (from {before:,} total; bbox prefilter kept {bbox_filtered:,})")
-        return pd.DataFrame(filtered)
-    except Exception as exc:
-        raise RuntimeError(f"Swiss polygon containment failed: {exc}")
+    shapely.prepare(boundary)
+    return shapely.covers(boundary, shapely.points(np.asarray(lon, dtype=float), np.asarray(lat, dtype=float)))
