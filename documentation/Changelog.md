@@ -1,13 +1,8 @@
 # Matching engine changelog
 
-This page records notable changes to the standalone `osm-public-transport-matcher` package,
-its adapters, matching behavior, result production and command-line interface.
-Review-application releases are recorded separately in the
-[review application changelog](https://github.com/openTdataCH/stop_sync_osm_atlas/blob/main/documentation/Changelog.md).
+This page records notable changes to the standalone `osm-public-transport-matcher` package, its adapters, matching behaviour, result production and command-line interface. Review-application releases are recorded separately in the [review application changelog](https://github.com/openTdataCH/stop_sync_osm_atlas/blob/main/documentation/Changelog.md).
 
-Changes to the [result bundle contract](Result%20bundle%20format.md) are recorded in both
-changelogs: here from the producer side and in the application changelog from the
-consumer side.
+Changes to the [result bundle contract](Result%20bundle%20format.md) are recorded in both changelogs: here from the producer side and in the application changelog from the consumer side.
 
 ---
 

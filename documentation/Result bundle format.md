@@ -81,7 +81,7 @@ Rows refer to entities by key, never by position.
 - Every entity appears either in `matches` or in `unmatched`, never in both and never in neither.
 - `isolated` is true when no element of the other side lies within the profile's isolation radius.
 - `effectively_matched` marks the middle of a PTv2 two-sided stop whose two sides are matched. It does not create a match for the middle.
-- `disused` marks a [disused OSM element](1.3%20OSM%20data.md#disused-stops): one whose `osm_nodes` row has a `lifecycle`, the prefix of a retired stop tag such as `disused`. `lifecycle` is null for active elements. The disused rows are exactly the rows with a `lifecycle`, so such an element is never matched or effectively matched; the producer writes it with `isolated: false`. A missing `disused` counts as false, so earlier schema 1 bundles stay valid.
+- `disused` marks a [disused OSM element](1.3%20OSM%20data.md#disused-stops): one whose `osm_nodes` row has a `lifecycle`, the prefix of a retired stop tag such as `disused`. `lifecycle` is null for active elements. The disused rows are exactly the rows with a `lifecycle`, so such an element is never matched or effectively matched; the producer writes it with `isolated: false`. A missing `disused` counts as false.
 
 ## Groups
 
@@ -91,11 +91,20 @@ An **OSM stop unit** has `side: "osm"`, `stop_kind` (`single`, `pair` or `two_si
 
 ## Problems
 
-Each problem has a stable `problem_id`, derived from its type and the sorted keys of the entities it affects; its `evidence` can change between runs without changing that identity. A future review workflow can compare evidence to decide whether an earlier review still applies.
+Each problem has a stable `problem_id`, derived from its type and the sorted keys of the entities it affects; its `evidence` can change between runs without changing that identity. [E4.1](4.1%20Stop%20Problems.md) explains every `problem_type` and its priorities.
 
-An `identifier` problem lists one OSM element in `osm_ids` and no `source_keys`, whether the element is matched or not; its evidence names the values that matching could not use ([E4.1](4.1%20Stop%20Problems.md#identifier-problems)). An element with `identifier_only: true` was kept only for its identifier tags ([E1.3](1.3%20OSM%20data.md#stop-identifiers)). It appears when its identifier links it, or when it has an `identifier` problem, and then also an `unmatched` one. Its links get no other problems. A missing `identifier_only` counts as false.
+Each match row repeats the problems of that pair (type, priority and duplicate flags) in its `problems` field; the same problems appear in the `problems` section with their keys and evidence. Every unmatched source stop, and every unmatched OSM element that is neither effectively matched nor disused, has an `unmatched` problem; the other OSM elements have none.
 
-Each match row repeats the problems of that pair (type, priority and duplicate flags) in its `problems` field; the same problems appear in the `problems` section with their keys and evidence. Every unmatched source stop, and every unmatched OSM element that is neither effectively matched nor disused, has an `unmatched` problem; the other OSM elements have none. A `disused` problem lists only disused elements in `osm_ids` and no `source_keys`; its evidence holds `lifecycle` and `conflicting_source_keys` ([E4.1](4.1%20Stop%20Problems.md#disused-problems)).
+A problem's keys and `evidence` depend on the record it was found on. Every `evidence` holds the duplicate flags `has_source_duplicate` and `has_osm_duplicate`, and also:
+
+| Found on | `source_keys` and `osm_ids` | `evidence` also holds |
+|---|---|---|
+| A match: `distance`, `attributes`, `contradicts_route_matching`, `duplicates` | The source stop and the OSM element of the match | The match's own `evidence` |
+| An unmatched entity: `unmatched`, `duplicates` | The entity | `nearest_osm_distance_m` for a source stop, `nearest_source_distance_m` for an OSM element: the distance in metres to the nearest entity of the other side, null when there is none |
+| A disused OSM element: `disused` | The element in `osm_ids`, no `source_keys` | `lifecycle`, the prefix; `conflicting_source_keys`, the sorted keys of the unmatched source stops that make it P1, empty for P2 |
+| An OSM element with an identifier tag: `identifier` | The element in `osm_ids`, no `source_keys`, whether the element is matched or not | The identifier rule's `namespace` and `osm_tags`; `far`, the values that name a source stop beyond `long_distance`, each with `value`, `source_key` and `distance_m`; `unknown` and `malformed`, the values that name no stop or do not have the rule's form |
+
+An element with `identifier_only: true` was kept only for its identifier tags ([E1.3](1.3%20OSM%20data.md#stop-identifiers)). It appears when its identifier links it, or when it has an `identifier` problem, and then also an `unmatched` one. Its links get no other problems. A missing `identifier_only` counts as false.
 
 ## Routes
 
@@ -106,10 +115,10 @@ The `routes` section holds one row per collection. Each `value` is the complete 
 | `source_routes` | route of the source timetable | `route_id`, `route_id_normalized`, `agency_id`, `route_short_name`, `route_long_name`, `route_desc`, `route_type` |
 | `osm_route_relations` | OSM `type=route` relation | `relation_id`, `route`, `ref`, `name`, `from_name`, `to_name`, `operator`, `network`, `gtfs_route_id`, `route_master_id` and further PTv2 tags |
 | `line_families` | line on either side | `id`, `side`, `key`, `family_origin`, `public_name`, `ref`, `operator`, `gtfs_route_id`, `normalized_route_id`, `display_route_id` |
-| `itineraries` | direction or variant on either side | `id`, `side`, `key`, `line_family_id`, `direction_id`, `display_name`, `trip_count`, `canonical_stop_count` |
-| `stop_calls` | stop of an itinerary, in order | `id`, `itinerary_id`, `stop_sequence`, `source_stop_id`, `source_stop_key`, `source_stop_key_variants`, `osm_node_id`, `canonical_stop_key`, `stop_label`, `station_ref`, position |
-| `line_family_matches` | matched pair of families | `id`, `source_line_family_id`, `osm_line_family_id`, `match_method` |
-| `itinerary_matches` | matched pair of itineraries | `id`, `line_family_match_id`, `source_itinerary_id`, `osm_itinerary_id`, the scores, `match_reason` |
+| `itineraries` | direction or variant on either side | `id`, `side`, `key`, `line_family_id`, `direction_id`, `display_name`, `representative_headsign`, `trip_count`, `shape_id`, `headsign_or_pattern_hash`, `canonical_stop_count` |
+| `stop_calls` | stop of an itinerary, in order | `id`, `itinerary_id`, `stop_sequence`, `source_stop_id`, `source_stop_key`, `source_stop_key_variants`, `osm_node_id`, `canonical_stop_key`, `stop_label`, `station_ref`, `platform_code` (source), `member_role` (OSM), position |
+| `line_family_matches` | matched pair of families | `id`, `source_line_family_id`, `osm_line_family_id`, `match_method` ([E3.2](3.2%20Route-Route%20Matching.md#step-2-match-the-families)) |
+| `itinerary_matches` | matched pair of itineraries | `id`, `line_family_match_id`, `source_itinerary_id`, `osm_itinerary_id`, the scores and `match_reason` ([E3.2](3.2%20Route-Route%20Matching.md#step-4-pair-the-itineraries)) |
 
 Two counters complete the section: `matched_routes`, the number of family matches, and `unknown_source_stop_references`, the number of source stop calls whose stop is not among the bundle's source stops.
 
@@ -145,3 +154,20 @@ A consumer must not rebuild a missing optional extension from local raw files; i
 **Memory:** the entity, match, problem and diagnostic sections can be streamed row by row, but each `routes` and `extensions` value is one complete collection. Consumers should size their memory for the largest collection.
 
 A database schema change in a consumer does not by itself require a new bundle schema version.
+
+## Code
+
+| File | Role |
+|---|---|
+| `src/osm_public_transport_matcher/results/bundle.py` | `write_bundle()`: writes the sections and the manifest, validates them and publishes the directory with an exclusive rename |
+| `src/osm_public_transport_matcher/results/validation.py` | `validate_output()` and `validate_bundle()`: the producer's checks of the result and of the written files |
+| `src/osm_public_transport_matcher/routes.py` | The detailed route fields |
+| `tests/test_results.py` | Round trips, corrupt bundles, failed publication and concurrent writers |
+| [`backend/importing/bundle.py`](https://github.com/openTdataCH/stop_sync_osm_atlas/blob/main/backend/importing/bundle.py) | `read_bundle()`: the review application's own reader, which checks the version, checksums, counts and references |
+
+## Related pages
+
+- [E1 Input integrations & acquisition](1.%20Download%20and%20process%20data.md#ways-to-run-the-engine): the commands that write a bundle
+- [E2 Matching process](2.%20Matching%20process.md#output): the matching result that fills it
+- [E3 Routes](3.%20Routes.md) and [E4.1 Stop problems](4.1%20Stop%20Problems.md): the route model and the problem types
+- [A1.1 Bundle import and publication](https://github.com/openTdataCH/stop_sync_osm_atlas/blob/main/documentation/1.1%20Import%20Process.md): how the review application imports a bundle

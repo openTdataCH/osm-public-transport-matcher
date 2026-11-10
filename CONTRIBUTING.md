@@ -32,8 +32,8 @@ its limitations; raw percentages do not replace negative and failure-path tests.
 
 Use [the bounded mutation sample](quality/README.md#mutation-scope-provenance-and-surviving-mutants)
 when changing coordinate validation, and select the full configured validator
-when broader result-validation behavior changes. A surviving mutation calls for
-inspection or a stronger behavioral test. The current sample is advisory, so a
+when broader result-validation behaviour changes. A surviving mutation calls for
+inspection or a stronger behavioural test. The sample is advisory, so a
 zero process exit does not by itself mean all mutations were killed.
 
 Generic policy types belong in `core/profile.py`; `osm_public_transport_matcher` and
@@ -49,7 +49,7 @@ validation and PostGIS publication checks. The engine's own command cannot
 establish consumer compatibility or database rollback safety. Use the application
 quality workflow to review combined structural debt and coverage trends.
 
-Describe intended behavior, affected modules/contracts, preserved invariants,
+Describe intended behaviour, affected modules/contracts, preserved invariants,
 acceptance and failure examples, the documentation decision, and any recovery
 impact in the change review. Quality findings should be fixed or covered by a
 reviewed, expiring exception where that mechanism applies; regenerating a debt
@@ -59,36 +59,20 @@ baseline is not an automatic part of a green build.
 
 1. Add a small failing example using `SourceStop` and `OsmNode` in `tests/`. Assert expected identity pairs, not only total counts. Include the ambiguous or negative case that could create a false positive.
 2. Edit or add a class in `src/osm_public_transport_matcher/core/predicates/`. Subclass `BasePredicate` and implement `run(ctx)`. Read candidates from `ctx.source` and `ctx.osm` and record accepted links with `ctx.commit(...)`.
-3. For a new matching rule, register its factory and its progress stage in `api._predicates` and add its identifier to the desired profile's `predicate_names`. Record its inputs, assumptions and ordering below or in the module docstring.
+3. For a new matching rule, register its factory and its progress stage in `api._predicates` and add its identifier to the desired profile's `predicate_names`. Use an existing stage ID from `ENGINE_PROGRESS_STAGES` in `progress.py`, or add one as [E5.3](documentation/5.3%20Pipeline%20Progress%20Contract.md#adding-or-changing-a-stage) describes; rules that share a stage must be adjacent in the order. [E2 The matching rules](documentation/2.%20Matching%20process.md#the-matching-rules) lists every rule with its evidence and match types and explains why the rules run in that order; add the new rule there.
 4. Run the affected regression and the core suite. Preserve group propagation and candidate locks. Build reusable attribute indexes once per rule. Batch queries can contain candidates consumed by an earlier iteration; filter those candidates before committing. The 100-reference regression prevents repeated full OSM scans during reference matching.
 
 `ctx.commit` expands source duplicates and OSM pairs. The sides of a two-sided stop have their own predicate; never propagate a direct match to its middle. Station references intentionally support one-to-many and many-to-one links. Changing these allocation rules requires explicit regression cases.
 
 Name a matching rule and its match types after the evidence they use, and give each branch that decides differently its own match type, so a match type tells a reviewer how a pair was found.
 
-| Rule identifier | Inputs and assumptions | Default position |
-|---|---|---|
-| `identifier` | A profile `IdentifierRule`: OSM tags, such as `ref:sloid`, whose value equals one source stop's reference; within the long-distance cap. Elements kept only for their identifier are linked after all rules. | First, so that no weaker evidence gives a tagged element to another stop. Later rules skip their station-level shortcuts where it linked part of a station. |
-| `two_sided_stop` | Profile-approved station references; two source stops, the two sides and the middle of a PTv2 two-sided stop. | Before reference matching, which would see the stop as one element. |
-| `reference` | A profile rule with compatible reference namespace, scope and OSM tag. Platform codes refine station candidates. | Before weaker evidence. |
-| `name` | Exact source name against OSM name/UIC-name/GTFS-name; platform code can disambiguate. | Before GTFS route/distance. |
-| `gtfs_route` | Scoped GTFS route IDs and direction IDs, or direction labels; mutual unique best candidate. Where a candidate carries the stop's platform code, candidates labelled with another platform are left out. | Before distance. |
-| `group_distance` | Name or approved station groups; maximum-cardinality assignment under the distance cap. | First distance rule. |
-| `group_long_distance` | Same evidence under the profile's longer cap. | After `group_distance`. |
-| `local_ref_distance` | Equal platform code and `local_ref` within the normal distance cap. | Before nearest-only rules. |
-| `distance_only_candidate`, `distance_ratio`, `distance_only_candidate_second_pass` | Spatial candidates and compatible platform codes; only candidate or sufficient separation from the second candidate. | Last, in that order. |
-
-Name equality alone can be ambiguous across cities. The generic profile caps name matching at 1 km; the Swiss profile does not cap it. Route labels are weaker evidence than scoped route IDs. Profile options make such tradeoffs visible.
-
 ## Support another dataset
 
-Start with an external adapter that returns `adapters.base.AdapterResult`: a `SourceState` of `SourceStop` records, optionally with explicit duplicate groups and route evidence. It does not need registration inside `osm_public_transport_matcher`. Keep source IDs as strings and select a stable namespace without a colon. Preserve source-specific fields under namespaced `extensions`; core predicates must not require them.
+Start with an external adapter that returns `adapters.base.AdapterResult`: a `SourceState` of `SourceStop` records, optionally with explicit duplicate groups and route evidence. It does not need registration inside `osm_public_transport_matcher`. Preserve source-specific fields under namespaced `extensions`; core predicates must not require them.
 
-Use existing GTFS parsing when possible. Add a profile with reference mappings, thresholds and any grouping policy. Never infer that equal stop IDs or route IDs from different feeds mean the same entity. If an OSM extract's unscoped GTFS tags are assigned to a feed, make that adapter configuration explicit.
+Use existing GTFS parsing when possible. Add a [dataset profile](documentation/2.%20Matching%20process.md#dataset-profiles) with reference mappings, thresholds and any grouping policy. Never infer that equal stop IDs or route IDs from different feeds mean the same entity. If an OSM extract's unscoped GTFS tags are assigned to a feed, make that adapter configuration explicit.
 
-Include an offline fixture covering at least one accepted match, one unmatched source stop, one unmatched OSM element and missing optional route data. Do not put file reading, pandas, environment lookups, Flask or SQLAlchemy in the core. Parser/acquisition dependencies belong in optional extras in `pyproject.toml`.
-
-An adapter belongs in this distribution only when it supports a broadly reusable standard or a maintained first-party deployment. It must have stable namespaced identities, strict validation, deterministic explicit inputs, provenance/fingerprints, isolated optional dependencies, offline tests and an identified maintainer. One-off agency or national adapters should remain external. Network clients belong under `acquisition/`; format parsing belongs under `adapters/`; dataset-specific composition belongs under `integrations/`.
+[What belongs in this distribution](documentation/1.%20Download%20and%20process%20data.md#what-belongs-in-this-distribution) lists the identity, core and test requirements an adapter must meet and decides whether it belongs here or stays external; [Code structure](documentation/1.%20Download%20and%20process%20data.md#code-structure) shows where parsing, acquisition and composition live.
 
 ## Understand or report a bad match
 
