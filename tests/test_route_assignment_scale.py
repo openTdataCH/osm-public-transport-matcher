@@ -17,6 +17,7 @@ def test_choose_best_itinerary_pairs_handles_large_source_small_osm_without_recu
             matched, score = eligible.get((source_itinerary['id'], osm_itinerary['id']), (0, 0.0))
             pair_scores[(source_itinerary['id'], osm_itinerary['id'])] = {
                 'is_eligible': matched > 0,
+                'direction_matches': matched > 0,
                 'matched_stop_count': matched,
                 'stop_score': score,
                 'matched_platform_count': matched,
