@@ -5,6 +5,7 @@ import csv
 import os
 import xml.etree.ElementTree as ET
 
+from osm_public_transport_matcher.adapters.osm_stop_ways import stop_ways
 from osm_public_transport_matcher.core.osm_tags import is_public_transport_route
 
 
@@ -97,41 +98,27 @@ def process_osm_routes_data(xml_data, out_dir="data/processed/"):
         print(f"Wrote {len(rows)} rows to {path}")
 
     nodes = {}
-    node_uic_refs = set()
 
     for node in root.findall(".//node"):
         node_id = node.get('id')
-        tags = _tags_for(node)
-        uic_ref = tags.get('uic_ref')
         nodes[node_id] = _build_stop_lookup_record(
             node_id,
-            tags,
+            _tags_for(node),
             lat=node.get('lat'),
             lon=node.get('lon'),
         )
-        if uic_ref:
-            node_uic_refs.add(uic_ref)
 
-    for way in root.findall(".//way"):
-        way_id = way.get('id')
-        virtual_id = f"way_{way_id}"
-        tags = _tags_for(way)
-        uic_ref = tags.get('uic_ref')
-        way_type = tags.get('public_transport')
-        aerialway = tags.get('aerialway')
-        center = way.find('./center')
-        center_lat = center.get('lat') if center is not None else None
-        center_lon = center.get('lon') if center is not None else None
-        
-        is_aerialway_station = aerialway == 'station' and way_type == 'station'
-        is_uic_without_node = bool(uic_ref) and uic_ref not in node_uic_refs
-        if is_aerialway_station or is_uic_without_node:
-            nodes[virtual_id] = _build_stop_lookup_record(
-                virtual_id,
-                tags,
-                lat=center_lat,
-                lon=center_lon,
-            )
+    # The same ways as read_osm(). A way kept only for its stop identifier is
+    # not a stop call, so a route member on it stays unresolved.
+    for way in stop_ways(root):
+        if way.identifier_only:
+            continue
+        nodes[way.virtual_id] = _build_stop_lookup_record(
+            way.virtual_id,
+            way.tags,
+            lat=way.lat,
+            lon=way.lon,
+        )
 
     def parse_direction_from_ref_trips(ref_trips_value):
         if not ref_trips_value: return None

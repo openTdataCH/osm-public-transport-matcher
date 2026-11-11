@@ -5,7 +5,8 @@ import xml.etree.ElementTree as ET
 from collections import defaultdict
 from pathlib import Path
 from osm_public_transport_matcher.adapters.osm_routes import public_transport_relation_ids
-from osm_public_transport_matcher.core.osm_tags import STOP_IDENTIFIER_KEYS, lifecycle_of
+from osm_public_transport_matcher.adapters.osm_stop_ways import stop_ways
+from osm_public_transport_matcher.core.osm_tags import STOP_IDENTIFIER_KEYS
 from osm_public_transport_matcher.core.state import OsmState, osm_node_from_entry
 
 logger = logging.getLogger(__name__)
@@ -16,10 +17,9 @@ def read_osm(xml_file: str | Path, *, route_namespace: str | None = None, route_
     """Read nodes and supported station ways, retaining ordered relation evidence.
 
     Nodes and ways keep distinct identities even when coordinates coincide.
-    Ways currently use Overpass centers or the mean of available member nodes;
-    relation geometries are outside the supported stop geometry contract.
-    Another way with one of ``identifier_keys`` (a platform with ``ref:sloid``)
-    is kept ``identifier_only``: only its identifier can link it, and it adds
+    Which ways are stops, and where, is decided by ``stop_ways()``, the rule
+    the route reader also follows. A way kept ``identifier_only`` (a platform
+    with ``ref:sloid``) can be linked only by its identifier, and it adds
     nothing to the name, station-reference or direction evidence.
     """
     tree = ET.parse(xml_file)
@@ -32,9 +32,6 @@ def read_osm(xml_file: str | Path, *, route_namespace: str | None = None, route_
     # Collect element names/UICs for relation direction extraction
     element_id_to_name: dict[str, str] = {}
     element_id_to_uic: dict[str, str] = {}
-    # Needed for selective way inclusion (issue #37)
-    node_uic_refs: set[str] = set()
-    node_coord_by_id: dict[str, tuple[float, float]] = {}
 
     for node in root.iter("node"):
         node_id = node.get("id")
@@ -64,14 +61,9 @@ def read_osm(xml_file: str | Path, *, route_namespace: str | None = None, route_
         }
         all_nodes[str(entry['node_id'])] = entry
 
-        node_coord_by_id[node_id] = (lat, lon)
-
         if "uic_ref" in tags:
             uic_ref_dict[tags["uic_ref"]].append(entry)
             element_id_to_uic[node_id] = tags["uic_ref"]
-            # A disused node must not hide an active stop way with the same uic_ref.
-            if not lifecycle_of(tags):
-                node_uic_refs.add(tags["uic_ref"])
 
         if "name" in tags:
             element_id_to_name[node_id] = tags["name"]
@@ -80,59 +72,18 @@ def read_osm(xml_file: str | Path, *, route_namespace: str | None = None, route_
             if key in tags:
                 name_index[tags[key]].append(entry)
 
-    # Parse ways and keep only requested categories:
-    # 1) aerialway=station + public_transport=station
-    # 2) ways with uic_ref where no node has the same uic_ref
+    # Ways: the shared rule of osm_stop_ways decides which are stops.
     selected_way_count = 0
-    for way in root.iter("way"):
-        way_id = way.get("id")
-        if not way_id:
-            continue
-
-        tags: dict[str, str] = {}
-        local_ref = None
-        for tag in way.findall("tag"):
-            k, v = tag.get("k"), tag.get("v")
-            tags[k] = v
-            if k == "local_ref":
-                local_ref = v
-            elif k == "ref" and not local_ref:
-                local_ref = v
-
-        is_aerialway_station = (
-            tags.get("aerialway") == "station" and
-            tags.get("public_transport") == "station"
-        )
+    for way in stop_ways(root, identifier_keys):
+        tags = way.tags
+        virtual_id = way.virtual_id
         way_uic_ref = tags.get("uic_ref")
-        is_uic_without_node = bool(way_uic_ref) and way_uic_ref not in node_uic_refs
-        identifier_only = not (is_aerialway_station or is_uic_without_node) and any(
-            tags.get(key) for key in identifier_keys)
-        if not (is_aerialway_station or is_uic_without_node or identifier_only):
-            continue
-
-        center = way.find("center")
-        lat = lon = None
-        if center is not None:
-            try:
-                lat = float(center.get("lat"))
-                lon = float(center.get("lon"))
-            except (ValueError, TypeError):
-                lat = lon = None
-
-        member_node_ids = [n.get("ref") for n in way.findall("nd") if n.get("ref")]
-        if lat is None or lon is None:
-            coords = [node_coord_by_id[nid] for nid in member_node_ids if nid in node_coord_by_id]
-            if not coords:
-                continue
-            lat = sum(c[0] for c in coords) / len(coords)
-            lon = sum(c[1] for c in coords) / len(coords)
-
-        virtual_id = f"way_{way_id}"
+        identifier_only = way.identifier_only
         entry = {
             'node_id': virtual_id,
-            'lat': lat,
-            'lon': lon,
-            'local_ref': local_ref,
+            'lat': way.lat,
+            'lon': way.lon,
+            'local_ref': tags.get("local_ref") or tags.get("ref"),
             'tags': tags,
             'identifier_only': identifier_only,
         }

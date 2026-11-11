@@ -19,7 +19,7 @@ First public release. The matching code of the review application becomes a pack
 
 ### Inputs
 
-- **Adapters** — Generic GTFS (folder or ZIP), Swiss ATLAS with GTFS-to-SLOID resolution, and OSM XML. Other datasets return the public `AdapterResult`. See [E1](1.%20Input%20integrations%20%26%20acquisition.md).
+- **Adapters** — Generic GTFS (folder or ZIP), Swiss ATLAS with GTFS-to-SLOID resolution, and OSM XML, whose stop reader and route reader take their station ways from one shared rule. Other datasets return the public `AdapterResult`. See [E1](1.%20Input%20integrations%20%26%20acquisition.md).
 - **Swiss acquisition** — Optional downloads of ATLAS, the Swiss GTFS feed, the Swiss boundary and an Overpass snapshot, with verified caches. Only public transport route relations are downloaded, and an invalid Overpass answer fails the run instead of being matched as a partial snapshot.
 
 ### Results and operations

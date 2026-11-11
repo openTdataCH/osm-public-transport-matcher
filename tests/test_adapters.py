@@ -284,9 +284,48 @@ def test_osm_adapter_marks_lifecycle_prefixed_stops_as_disused(tmp_path):
 
 
 def test_disused_node_does_not_hide_an_active_station_way(tmp_path):
+    # Both readers keep the way: stop matching knows way_222, and the route
+    # that stops at it gets a stop call there.
     path = tmp_path / 'osm.xml'
     path.write_text('''<osm>
-      <node id="1" lat="48" lon="2"><tag k="disused:railway" v="halt"/><tag k="uic_ref" v="850001"/></node>
-      <way id="5"><center lat="48" lon="2.001"/><tag k="railway" v="station"/><tag k="uic_ref" v="850001"/></way>
+      <node id="111" lat="48" lon="2"><tag k="disused:railway" v="halt"/><tag k="uic_ref" v="8500001"/></node>
+      <node id="112" lat="48.01" lon="2"><tag k="railway" v="halt"/><tag k="uic_ref" v="8500002"/></node>
+      <way id="222"><center lat="48" lon="2.001"/><tag k="public_transport" v="station"/><tag k="uic_ref" v="8500001"/></way>
+      <relation id="333"><member type="way" ref="222" role="stop"/><member type="node" ref="112" role="stop"/>
+        <tag k="type" v="route"/><tag k="route" v="train"/></relation>
     </osm>''')
-    assert {node.key for node in read_osm(path).get_all_nodes()} == {'osm:node:1', 'osm:way:5'}
+    assert {node.key for node in read_osm(path).get_all_nodes()} == {'osm:node:111', 'osm:node:112', 'osm:way:222'}
+    stops = process_osm_routes_data(path.read_text(), out_dir=None)['osm_route_relation_stops']
+    assert stops['osm_node_id'].tolist() == ['way_222', '112']
+    assert stops['uic_ref'].tolist() == ['8500001', '8500002']
+
+
+def test_active_node_hides_a_station_way_in_both_readers(tmp_path):
+    path = tmp_path / 'osm.xml'
+    path.write_text('''<osm>
+      <node id="1" lat="48" lon="2"><tag k="railway" v="halt"/><tag k="uic_ref" v="850001"/></node>
+      <way id="5"><center lat="48" lon="2.001"/><tag k="public_transport" v="station"/><tag k="uic_ref" v="850001"/></way>
+      <relation id="9"><member type="way" ref="5" role="stop"/><tag k="type" v="route"/><tag k="route" v="train"/></relation>
+    </osm>''')
+    assert {node.key for node in read_osm(path).get_all_nodes()} == {'osm:node:1'}
+    assert process_osm_routes_data(path.read_text(), out_dir=None)['osm_route_relation_stops'].empty
+
+
+def test_station_way_without_center_sits_at_its_member_nodes_in_both_readers(tmp_path):
+    # Way 5 has no <center>: both readers place it at the mean of its nodes.
+    # Way 6 has neither a centre nor placed nodes: neither reader keeps it.
+    path = tmp_path / 'osm.xml'
+    path.write_text('''<osm>
+      <node id="1" lat="48.0" lon="2.0"/>
+      <node id="2" lat="48.2" lon="2.4"/>
+      <way id="5"><nd ref="1"/><nd ref="2"/><tag k="public_transport" v="station"/><tag k="uic_ref" v="850001"/></way>
+      <way id="6"><nd ref="404"/><tag k="public_transport" v="station"/><tag k="uic_ref" v="850002"/></way>
+      <relation id="9"><member type="way" ref="5" role="stop"/><member type="way" ref="6" role="stop"/>
+        <tag k="type" v="route"/><tag k="route" v="bus"/></relation>
+    </osm>''')
+    ways = {node.node_id: node for node in read_osm(path).get_all_nodes() if node.node_id.startswith('way_')}
+    assert list(ways) == ['way_5']
+    assert (ways['way_5'].lat, ways['way_5'].lon) == pytest.approx((48.1, 2.2))
+    stops = process_osm_routes_data(path.read_text(), out_dir=None)['osm_route_relation_stops']
+    assert stops['osm_node_id'].tolist() == ['way_5']
+    assert (stops['stop_lat'][0], stops['stop_lon'][0]) == pytest.approx((48.1, 2.2))
