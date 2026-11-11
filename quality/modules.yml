@@ -96,7 +96,7 @@
         ],
         "reference": [
           "CONTRIBUTING.md",
-          "documentation/5.3 Pipeline Progress Contract.md"
+          "documentation/5.3 Pipeline progress contract.md"
         ],
         "operations": [],
         "decision": [
@@ -148,13 +148,13 @@
       ],
       "docs": {
         "explanation": [
-          "documentation/1. Download and process data.md"
+          "documentation/1. Input integrations & acquisition.md"
         ],
         "reference": [
           "CONTRIBUTING.md"
         ],
         "operations": [
-          "documentation/5. Operations and performance.md"
+          "documentation/5. Operations & performance.md"
         ],
         "decision": []
       },

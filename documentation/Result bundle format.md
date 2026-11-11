@@ -63,7 +63,7 @@ No Python pickle, ORM object, credential or path needed for reading crosses the 
 
 The example shows one entry of `files`; a real manifest has all nine. `bytes` and `sha256` describe the compressed file, `rows` the number of decoded objects. `metadata` carries the run's provenance: the [capabilities](#capabilities), the complete dataset profile, a summary of counts, and a fingerprint (name, SHA-256, size) of every input file the adapters actually read. Integrations add their own metadata, such as attribution and acquisition details.
 
-`metadata.warnings`, when present, is a list of sentences about input problems that weakened the run without stopping it, such as a missing ATLAS column ([E1.1](1.1%20ATLAS%20stops.md#filters)). A consumer shows them with the run. The Swiss `metadata.acquisition` records `last_overpass_query_at`, when Overpass was queried, and `osm_data_at`, the Overpass `osm_base` time of the data it returned ([E1.3](1.3%20OSM%20data.md#the-download)).
+`metadata.warnings`, when present, is a list of sentences about input problems that weakened the run without stopping it, such as a missing ATLAS column ([E1.1](1.1%20Swiss%20ATLAS%20stops.md#filters)). A consumer shows them with the run. The Swiss `metadata.acquisition` records `last_overpass_query_at`, when Overpass was queried, and `osm_data_at`, the Overpass `osm_base` time of the data it returned ([E1.3](1.3%20OSM%20input%20and%20acquisition.md#the-download)).
 
 ## Keys and identities
 
@@ -81,7 +81,7 @@ Rows refer to entities by key, never by position.
 - Every entity appears either in `matches` or in `unmatched`, never in both and never in neither.
 - `isolated` is true when no element of the other side lies within the profile's isolation radius.
 - `effectively_matched` marks the middle of a PTv2 two-sided stop whose two sides are matched. It does not create a match for the middle.
-- `disused` marks a [disused OSM element](1.3%20OSM%20data.md#disused-stops): one whose `osm_nodes` row has a `lifecycle`, the prefix of a retired stop tag such as `disused`. `lifecycle` is null for active elements. The disused rows are exactly the rows with a `lifecycle`, so such an element is never matched or effectively matched; the producer writes it with `isolated: false`. A missing `disused` counts as false.
+- `disused` marks a [disused OSM element](1.3%20OSM%20input%20and%20acquisition.md#disused-stops): one whose `osm_nodes` row has a `lifecycle`, the prefix of a retired stop tag such as `disused`. `lifecycle` is null for active elements. The disused rows are exactly the rows with a `lifecycle`, so such an element is never matched or effectively matched; the producer writes it with `isolated: false`. A missing `disused` counts as false.
 
 ## Groups
 
@@ -91,7 +91,7 @@ An **OSM stop unit** has `side: "osm"`, `stop_kind` (`single`, `pair` or `two_si
 
 ## Problems
 
-Each problem has a stable `problem_id`, derived from its type and the sorted keys of the entities it affects; its `evidence` can change between runs without changing that identity. [E4.1](4.1%20Stop%20Problems.md) explains every `problem_type` and its priorities.
+Each problem has a stable `problem_id`, derived from its type and the sorted keys of the entities it affects; its `evidence` can change between runs without changing that identity. [E4.1](4.1%20Stop%20problems.md) explains every `problem_type` and its priorities.
 
 Each match row repeats the problems of that pair (type, priority and duplicate flags) in its `problems` field; the same problems appear in the `problems` section with their keys and evidence. Every unmatched source stop, and every unmatched OSM element that is neither effectively matched nor disused, has an `unmatched` problem; the other OSM elements have none.
 
@@ -104,7 +104,7 @@ A problem's keys and `evidence` depend on the record it was found on. Every `evi
 | A disused OSM element: `disused` | The element in `osm_ids`, no `source_keys` | `lifecycle`, the prefix; `conflicting_source_keys`, the sorted keys of the unmatched source stops that make it P1, empty for P2 |
 | An OSM element with an identifier tag: `identifier` | The element in `osm_ids`, no `source_keys`, whether the element is matched or not | The identifier rule's `namespace` and `osm_tags`; `far`, the values that name a source stop beyond `long_distance`, each with `value`, `source_key` and `distance_m`; `unknown` and `malformed`, the values that name no stop or do not have the rule's form |
 
-An element with `identifier_only: true` was kept only for its identifier tags ([E1.3](1.3%20OSM%20data.md#stop-identifiers)). It appears when its identifier links it, or when it has an `identifier` problem, and then also an `unmatched` one. Its links get no other problems. A missing `identifier_only` counts as false.
+An element with `identifier_only: true` was kept only for its identifier tags ([E1.3](1.3%20OSM%20input%20and%20acquisition.md#stop-identifiers)). It appears when its identifier links it, or when it has an `identifier` problem, and then also an `unmatched` one. Its links get no other problems. A missing `identifier_only` counts as false.
 
 ## Routes
 
@@ -117,8 +117,8 @@ The `routes` section holds one row per collection. Each `value` is the complete 
 | `line_families` | line on either side | `id`, `side`, `key`, `family_origin`, `public_name`, `ref`, `operator`, `gtfs_route_id`, `normalized_route_id`, `display_route_id` |
 | `itineraries` | direction or variant on either side | `id`, `side`, `key`, `line_family_id`, `direction_id`, `display_name`, `representative_headsign`, `trip_count`, `shape_id`, `headsign_or_pattern_hash`, `canonical_stop_count` |
 | `stop_calls` | stop of an itinerary, in order | `id`, `itinerary_id`, `stop_sequence`, `source_stop_id`, `source_stop_key`, `source_stop_key_variants`, `osm_node_id`, `canonical_stop_key`, `stop_label`, `station_ref`, `platform_code` (source), `member_role` (OSM), position |
-| `line_family_matches` | matched pair of families | `id`, `source_line_family_id`, `osm_line_family_id`, `match_method` ([E3.2](3.2%20Route-Route%20Matching.md#step-2-match-the-families)) |
-| `itinerary_matches` | matched pair of itineraries | `id`, `line_family_match_id`, `source_itinerary_id`, `osm_itinerary_id`, the scores and `match_reason` ([E3.2](3.2%20Route-Route%20Matching.md#step-4-pair-the-itineraries)) |
+| `line_family_matches` | matched pair of families | `id`, `source_line_family_id`, `osm_line_family_id`, `match_method` ([E3.2](3.2%20Route-route%20matching.md#step-2-match-the-families)) |
+| `itinerary_matches` | matched pair of itineraries | `id`, `line_family_match_id`, `source_itinerary_id`, `osm_itinerary_id`, the scores and `match_reason` ([E3.2](3.2%20Route-route%20matching.md#step-4-pair-the-itineraries)) |
 
 Two counters complete the section: `matched_routes`, the number of family matches, and `unknown_source_stop_references`, the number of source stop calls whose stop is not among the bundle's source stops.
 
@@ -149,7 +149,7 @@ A consumer must not rebuild a missing optional extension from local raw files; i
 
 **The producer** validates the complete matching result, writes it to a temporary directory, validates the written files again (references, checksums, counts) and then publishes the directory with an exclusive rename. It never replaces an existing directory, including during concurrent attempts. Exclusive renames are supported on Linux (`renameat2`), macOS (`renamex_np`) and Windows; on other platforms the writer fails before publishing. A failed run never leaves something that looks like a complete bundle.
 
-**A consumer** verifies the schema version, every checksum and row count, and all cross-references before using the data. The review application then stages the rows under its own database constraints and publishes them in one transaction; see [A1.1 Bundle import and publication](https://github.com/openTdataCH/stop_sync_osm_atlas/blob/main/documentation/1.1%20Import%20Process.md).
+**A consumer** verifies the schema version, every checksum and row count, and all cross-references before using the data. The review application then stages the rows under its own database constraints and publishes them in one transaction; see [A1.1 Bundle import and publication](https://github.com/openTdataCH/stop_sync_osm_atlas/blob/main/documentation/1.1%20Bundle%20import%20and%20publication.md).
 
 **Memory:** the entity, match, problem and diagnostic sections can be streamed row by row, but each `routes` and `extensions` value is one complete collection. Consumers should size their memory for the largest collection.
 
@@ -167,7 +167,7 @@ A database schema change in a consumer does not by itself require a new bundle s
 
 ## Related pages
 
-- [E1 Input integrations & acquisition](1.%20Download%20and%20process%20data.md#ways-to-run-the-engine): the commands that write a bundle
+- [E1 Input integrations & acquisition](1.%20Input%20integrations%20%26%20acquisition.md#ways-to-run-the-engine): the commands that write a bundle
 - [E2 Matching process](2.%20Matching%20process.md#output): the matching result that fills it
-- [E3 Routes](3.%20Routes.md) and [E4.1 Stop problems](4.1%20Stop%20Problems.md): the route model and the problem types
-- [A1.1 Bundle import and publication](https://github.com/openTdataCH/stop_sync_osm_atlas/blob/main/documentation/1.1%20Import%20Process.md): how the review application imports a bundle
+- [E3 Routes](3.%20Routes.md) and [E4.1 Stop problems](4.1%20Stop%20problems.md): the route model and the problem types
+- [A1.1 Bundle import and publication](https://github.com/openTdataCH/stop_sync_osm_atlas/blob/main/documentation/1.1%20Bundle%20import%20and%20publication.md): how the review application imports a bundle

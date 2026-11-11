@@ -107,20 +107,20 @@ The tag is the readable release name; the SHA is the deployment lock.
 
 ## Documentation
 
-The canonical engine documentation lives in [`documentation/`](documentation/1.%20Download%20and%20process%20data.md):
+The canonical engine documentation lives in [`documentation/`](documentation/1.%20Input%20integrations%20%26%20acquisition.md):
 
-- [Input integrations and acquisition](documentation/1.%20Download%20and%20process%20data.md)
+- [Input integrations and acquisition](documentation/1.%20Input%20integrations%20%26%20acquisition.md)
 - [Stop matching](documentation/2.%20Matching%20process.md)
 - [Route comparison](documentation/3.%20Routes.md)
 - [Problem detection](documentation/4.%20Problems.md)
 - [Result bundle format](documentation/Result%20bundle%20format.md)
-- [Operations and performance](documentation/5.%20Operations%20and%20performance.md)
-- [Engine tests](documentation/6.%20Pipeline%20tests.md)
+- [Operations and performance](documentation/5.%20Operations%20%26%20performance.md)
+- [Engine tests](documentation/6.%20Engine%20tests.md)
 - [Changelog](documentation/Changelog.md)
 
 The review application may render these pages in its combined documentation portal, but changes to engine behaviour and its documentation belong together in this package.
 
-External datasets need no code in this package. [E1 What belongs in this distribution](documentation/1.%20Download%20and%20process%20data.md#what-belongs-in-this-distribution) gives the acceptance criteria for built-in adapters.
+External datasets need no code in this package. [E1 What belongs in this distribution](documentation/1.%20Input%20integrations%20%26%20acquisition.md#what-belongs-in-this-distribution) gives the acceptance criteria for built-in adapters.
 
 ## Standalone container
 
@@ -146,4 +146,4 @@ Start with [CONTRIBUTING.md](CONTRIBUTING.md). Core changes use tiny offline cas
 
 ## Swiss processing performance
 
-[E5.2 Pipeline performance](documentation/5.2%20Pipeline%20Performance.md) explains how the Swiss processing is kept fast, its tuning settings and how to rerun the benchmark.
+[E5.2 Pipeline performance](documentation/5.2%20Pipeline%20performance.md) explains how the Swiss processing is kept fast, its tuning settings and how to rerun the benchmark.
