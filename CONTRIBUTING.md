@@ -13,7 +13,7 @@ matches CI and produces branch coverage and test reports. See
 [quality evidence](quality/README.md) for the module catalog, dependency rules,
 raw artifacts, and optional mutation sample.
 
-For only the core, install `.[test]` and run `tests/test_api.py`, `tests/test_matching_regressions.py` and `tests/test_results.py`. Those tests use normalized records, do not import adapters and need no network, database or review application.
+For only the core, install `.[test]` and run `tests/test_api.py`, `tests/test_matching_regressions.py` and `tests/test_results.py`. Those tests use normalised records, do not import adapters and need no network, database or review application.
 
 ## Quality workflow for a change
 
@@ -51,9 +51,10 @@ quality workflow to review combined structural debt and coverage trends.
 
 Describe intended behaviour, affected modules/contracts, preserved invariants,
 acceptance and failure examples, the documentation decision, and any recovery
-impact in the change review. Quality findings should be fixed or covered by a
-reviewed, expiring exception where that mechanism applies; regenerating a debt
-baseline is not an automatic part of a green build.
+impact in the change review. New duplicated blocks fail the combined clone gate
+unless refactored or deliberately added to the reviewed baseline in the
+application checkout; regenerating a debt baseline is not an automatic part of a
+green build.
 
 ## Add or improve a predicate
 
@@ -80,4 +81,4 @@ Include the dataset namespace, source ID, OSM type/ID, observed rule, expected l
 
 Result schemas are versioned separately from the engine package. Changing fields consumed by the review app requires updating `documentation/Result bundle format.md`, contract fixtures and importer compatibility checks. A failed engine run or bundle validation must not replace an earlier published bundle.
 
-No commit or push is required to run tests or propose a patch. Preserve the repository's license notice when copying files.
+No commit or push is required to run tests or propose a patch. Preserve the repository's licence notice when copying files.

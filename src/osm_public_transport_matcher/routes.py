@@ -8,7 +8,6 @@ bundle's ``routes`` section.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections import Counter, defaultdict
 from itertools import count
@@ -54,11 +53,6 @@ def _to_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
-
-
-def _hash_sequence(values: list[str]) -> str:
-    digest = hashlib.sha1('>'.join(values).encode('utf-8')).hexdigest()
-    return digest[:16]
 
 
 def _records(dataframe: pd.DataFrame | None) -> list[dict[str, Any]]:
@@ -225,9 +219,6 @@ def _build_source_rows(
                 'representative_headsign': _to_text(row.get('representative_headsign')),
                 'direction_label': _to_text(row.get('direction_label')),
                 'trip_count': _to_int(row.get('trip_count'), default=0),
-                'shape_id': _to_text(row.get('shape_id')),
-                'geometry_wkt': _to_text(row.get('geometry_wkt')),
-                'headsign_or_pattern_hash': _to_text(row.get('headsign_or_pattern_hash')),
             })
         for row in _records(stop_calls):
             normalized_row, unknown = _build_source_stop_call_row(row, known_source_keys, source_stop_lookup)
@@ -546,14 +537,11 @@ def _build_itinerary_rows(
             'key': row['itinerary_id'],
             'line_family_id': line_family_id,
             'direction_id': row.get('direction_id'),
-            'headsign_or_pattern_hash': row.get('headsign_or_pattern_hash'),
             'display_name': _first_non_empty(row.get('direction_label'), row.get('representative_headsign'), row['itinerary_id']),
             'representative_headsign': row.get('representative_headsign'),
             'from_name': None,
             'to_name': None,
             'trip_count': row.get('trip_count'),
-            'shape_id': row.get('shape_id'),
-            'geometry_wkt': row.get('geometry_wkt'),
             'canonical_stop_count': len(call_rows),
         })
         for call_row in call_rows:
@@ -588,10 +576,6 @@ def _build_itinerary_rows(
             continue
         call_rows = _one_call_per_stop_visit(relation_stop_rows_by_relation.get(row['relation_id'], []))
         itinerary_id = next(itinerary_id_counter)
-        sequence_pattern_hash = _hash_sequence([
-            _first_non_empty(call_row.get('canonical_stop_key'), f"osm:{call_row.get('osm_node_id')}")
-            for call_row in call_rows
-        ]) if call_rows else None
         direction_id = next((call_row.get('direction_id') for call_row in call_rows if call_row.get('direction_id') is not None), None)
         itinerary_rows.append({
             'id': itinerary_id,
@@ -599,7 +583,6 @@ def _build_itinerary_rows(
             'key': row['relation_id'],
             'line_family_id': line_family_id,
             'direction_id': direction_id,
-            'headsign_or_pattern_hash': sequence_pattern_hash,
             'display_name': _first_non_empty(
                 f"{row.get('from_name')} -> {row.get('to_name')}" if row.get('from_name') or row.get('to_name') else None,
                 row.get('name'),
@@ -610,8 +593,6 @@ def _build_itinerary_rows(
             'from_name': row.get('from_name'),
             'to_name': row.get('to_name'),
             'trip_count': 1,
-            'shape_id': row.get('gtfs_shape_id'),
-            'geometry_wkt': None,
             'canonical_stop_count': len(call_rows),
         })
         for call_row in call_rows:
@@ -964,10 +945,7 @@ def _score_itinerary_pair(
     else:
         match_reason = 'below_stop_match_threshold'
     return {
-        'direction_score': 1.0 if direction_matches else 0.0,
         'stop_score': stop_score,
-        'geometry_score': None,
-        'overall_score': stop_score,
         'match_reason': match_reason,
         'matched_stop_count': matched_stop_count,
         # Rank eligible pairs (see _choose_best_itinerary_pairs).
@@ -1081,7 +1059,14 @@ def compare_routes(
             if reason != 'normalized_gtfs_route_id'
             or _route_id_confirmed(evidence, source_family['id'], osm_family['id'])
         ]
-        candidate_pairs.sort(key=lambda item: (-item[0], item[1]['id'], item[2]['id']))
+        # Equal scores: the same line number first, then the line that serves more of the stops.
+        candidate_pairs.sort(key=lambda item: (
+            -item[0],
+            not evidence.same_line_number(item[1]['id'], item[2]['id']),
+            -evidence.line_score(item[1]['id'], item[2]['id']),
+            item[1]['id'],
+            item[2]['id'],
+        ))
 
         matched_source_family_ids: set[int] = set()
         matched_osm_family_ids: set[int] = set()
@@ -1131,10 +1116,7 @@ def compare_routes(
                     'line_family_match_id': line_family_match_row['id'],
                     'source_itinerary_id': source_itinerary['id'],
                     'osm_itinerary_id': osm_itinerary['id'],
-                    'direction_score': score_row['direction_score'],
                     'stop_score': score_row['stop_score'],
-                    'geometry_score': score_row['geometry_score'],
-                    'overall_score': score_row['overall_score'],
                     'match_reason': score_row['match_reason'],
                 })
 

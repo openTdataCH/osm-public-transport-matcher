@@ -167,9 +167,7 @@ class OsmState:
 
         # Spatial indices
         self._cached_tree = None
-        self._cached_pts = []
         self._cached_nodes_list = []
-        self._cached_include_stations = None
 
     def build_groups(self, source_uic_counts: dict[str, int],
                      source_name_to_station_ref: dict[str, str] = None,
@@ -867,15 +865,6 @@ class OsmState:
             return OsmEntity(node, siblings, group_type)
         return OsmEntity(node)
 
-    def get_by_uic(self, uic: str) -> list[OsmEntity]:
-        """Gets unmatched non-station entities for a UIC reference (excludes siblings)."""
-        return [
-            self._wrap_entity(c) for c in self._uic_ref_dict.get(str(uic), [])
-            if c['node_id'] not in self.used_ids
-            and not self._is_sibling(c['node_id'])
-            and not self._to_osm_node(c).is_station
-        ]
-
     def get_by_name(self, name: str) -> list[OsmEntity]:
         """Gets unmatched non-station entities for a given name (excludes siblings)."""
         return [
@@ -930,28 +919,23 @@ class OsmState:
 
         return dict(result)
 
-    def _ensure_spatial_index(self, include_stations: bool = False):
-        """Builds KDTree on demand."""
-        # Only rebuild if the cached tree is missing or the station filter flipped.
-        if (self._cached_tree is None or
-            self._cached_include_stations != include_stations):
-            
-            # Build the tree with ALL nodes (except optionally stations).
-            # We filter out `used_ids` AT QUERY TIME instead of rebuilding the tree.
+    def _ensure_spatial_index(self):
+        """Builds the KDTree of all non-station nodes on first use."""
+        if self._cached_tree is None:
+            # `used_ids` are filtered out at query time instead of rebuilding the tree.
             valid_nodes = {
                 coord: n for coord, n in self._all_nodes.items()
-                if include_stations or not self._to_osm_node(n).is_station
+                if not self._to_osm_node(n).is_station
             }
-            self._cached_tree, self._cached_pts, self._cached_nodes_list = build_kdtree_from_nodes(valid_nodes)
-            self._cached_include_stations = include_stations
+            self._cached_tree, _, self._cached_nodes_list = build_kdtree_from_nodes(valid_nodes)
 
-    def batch_query_radius(self, coords_list: list[tuple[float, float]], max_distance: float, include_stations: bool = False) -> list[list[tuple[OsmEntity, float]]]:
+    def batch_query_radius(self, coords_list: list[tuple[float, float]], max_distance: float) -> list[list[tuple[OsmEntity, float]]]:
         """Query for matching nodes around a radius for multiple coordinates at once.
 
         Returns a list (one per coordinate pair) of lists of tuples (OsmEntity, actual_distance_in_meters).
-        Excludes used_osm_ids automatically.
+        Excludes stations and used_osm_ids automatically.
         """
-        self._ensure_spatial_index(include_stations)
+        self._ensure_spatial_index()
 
         if self._cached_tree is None or not coords_list:
             return [[] for _ in coords_list]

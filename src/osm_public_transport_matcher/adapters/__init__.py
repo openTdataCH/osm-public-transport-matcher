@@ -1,9 +1,9 @@
 """Curated format readers outside the matching core.
 
-External adapters can implement :class:`SourceAdapter` without being registered
+External adapters return an :class:`AdapterResult` without being registered
 in this package. Import individual built-ins to keep dependencies lazy.
 """
 
-from .base import AdapterResult, SourceAdapter
+from .base import AdapterResult
 
-__all__ = ["AdapterResult", "SourceAdapter"]
+__all__ = ["AdapterResult"]

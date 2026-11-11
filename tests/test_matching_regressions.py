@@ -817,7 +817,7 @@ class TestTwoSidedStopMatching:
         )
         ctx.osm.build_groups(source_uic_counts={'u_trio': 2})
 
-        rep_entity = next(e for e in ctx.osm.get_by_uic('u_trio') if e.node_id == 'side_other' or e.node_id == 'side_rep')
+        rep_entity = next(e for e in ctx.osm.get_all_unmatched_grouped('uic_ref')['u_trio'] if e.node_id == 'side_other' or e.node_id == 'side_rep')
         atlas_entry = next(e for e in ctx.source.get_unmatched_records() if e.source_id == 'a1')
 
         ctx.commit(atlas_entry, rep_entity, 'uic_reference_one_osm', 0.0, 'test two-sided stop propagation guard')
@@ -868,4 +868,4 @@ class TestTwoSidedStopMatching:
         assert ctx.osm.get_two_sided_stop_representatives() == []
         assert ctx.osm._group_representative == {'middle': 'side_near'}
         assert ctx.osm._group_siblings['side_near'][0] == 'ptv2_pair_uic_ref'
-        assert {entity.node_id for entity in ctx.osm.get_by_uic('u_trio')} == {'side_near', 'side_far'}
+        assert {entity.node_id for entity in ctx.osm.get_all_unmatched_grouped('uic_ref')['u_trio']} == {'side_near', 'side_far'}

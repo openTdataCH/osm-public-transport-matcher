@@ -40,8 +40,8 @@ class TestGtfsRoutesIntegration:
         gtfs_stream = {
             'trip_stop_times_path': str(stop_times_path),
             'trips': pd.DataFrame([
-                {'trip_id': 'trip-1', 'route_id': 'gtfs-route-1', 'direction_id': '0', 'trip_headsign': 'End 1', 'trip_short_name': None, 'shape_id': None},
-                {'trip_id': 'trip-2', 'route_id': 'gtfs-route-2', 'direction_id': '1', 'trip_headsign': 'End 2', 'trip_short_name': None, 'shape_id': None},
+                {'trip_id': 'trip-1', 'route_id': 'gtfs-route-1', 'direction_id': '0', 'trip_headsign': 'End 1', 'trip_short_name': None},
+                {'trip_id': 'trip-2', 'route_id': 'gtfs-route-2', 'direction_id': '1', 'trip_headsign': 'End 2', 'trip_short_name': None},
             ]),
             'stops': pd.DataFrame([
                 {'stop_id': 'stop-1a', 'stop_name': 'Alpha', 'platform_code': None, 'original_stop_id': '8501000:0:1', 'location_type': None, 'parent_station': None},
@@ -284,8 +284,8 @@ def test_swiss_itineraries_collapse_same_uic_sequence_and_keep_sloid_variants(tm
     gtfs_data = {
         'trip_stop_times_path': str(stop_times_path),
         'trips': pd.DataFrame([
-            {'trip_id': 'trip-1', 'route_id': 'R1', 'direction_id': '0', 'trip_headsign': 'End', 'trip_short_name': None, 'shape_id': None},
-            {'trip_id': 'trip-2', 'route_id': 'R1', 'direction_id': '0', 'trip_headsign': 'End', 'trip_short_name': None, 'shape_id': None},
+            {'trip_id': 'trip-1', 'route_id': 'R1', 'direction_id': '0', 'trip_headsign': 'End', 'trip_short_name': None},
+            {'trip_id': 'trip-2', 'route_id': 'R1', 'direction_id': '0', 'trip_headsign': 'End', 'trip_short_name': None},
         ]),
         'stops': pd.DataFrame([
             {'stop_id': '8501000:0:A', 'stop_name': 'Alpha A', 'platform_code': 'A', 'original_stop_id': '8501000:0:A', 'location_type': None, 'parent_station': None},
@@ -321,7 +321,7 @@ def test_swiss_stop_calls_take_the_station_number_from_didok_for_sloid_stop_ids(
     gtfs_data = {
         'trip_stop_times_path': str(stop_times_path),
         'trips': pd.DataFrame([{'trip_id': 'trip-1', 'route_id': 'R1', 'direction_id': '0', 'trip_headsign': 'End',
-                                'trip_short_name': None, 'shape_id': None}]),
+                                'trip_short_name': None}]),
         'stops': pd.DataFrame([
             {'stop_id': 'ch:1:sloid:1075', 'stop_name': 'Lausanne-Ouchy (lac)', 'platform_code': None,
              'original_stop_id': 'ch:1:sloid:1075', 'location_type': None, 'parent_station': None, 'didok': 8501075},
@@ -352,8 +352,8 @@ def test_swiss_itineraries_keep_distinct_patterns_when_headsign_missing(tmp_path
     gtfs_data = {
         'trip_stop_times_path': str(stop_times_path),
         'trips': pd.DataFrame([
-            {'trip_id': 'trip-1', 'route_id': 'R1', 'direction_id': '0', 'trip_headsign': None, 'trip_short_name': None, 'shape_id': None},
-            {'trip_id': 'trip-2', 'route_id': 'R1', 'direction_id': '0', 'trip_headsign': None, 'trip_short_name': None, 'shape_id': None},
+            {'trip_id': 'trip-1', 'route_id': 'R1', 'direction_id': '0', 'trip_headsign': None, 'trip_short_name': None},
+            {'trip_id': 'trip-2', 'route_id': 'R1', 'direction_id': '0', 'trip_headsign': None, 'trip_short_name': None},
         ]),
         'stops': pd.DataFrame([
             {'stop_id': '8501000:0:A', 'stop_name': 'Alpha', 'platform_code': 'A', 'original_stop_id': '8501000:0:A', 'location_type': None, 'parent_station': None},
@@ -391,9 +391,9 @@ def test_swiss_itinerary_direction_label_uses_dominant_uic_subsequence(tmp_path)
             {'route_id': 'R1', 'direction_id': '0', 'direction': 'Wrong -> Label'},
         ]),
         'trips': pd.DataFrame([
-            {'trip_id': 'trip-1', 'route_id': 'R1', 'direction_id': '0', 'trip_headsign': 'End', 'trip_short_name': None, 'shape_id': None},
-            {'trip_id': 'trip-2', 'route_id': 'R1', 'direction_id': '0', 'trip_headsign': 'End', 'trip_short_name': None, 'shape_id': None},
-            {'trip_id': 'trip-3', 'route_id': 'R1', 'direction_id': '0', 'trip_headsign': 'End', 'trip_short_name': None, 'shape_id': None},
+            {'trip_id': 'trip-1', 'route_id': 'R1', 'direction_id': '0', 'trip_headsign': 'End', 'trip_short_name': None},
+            {'trip_id': 'trip-2', 'route_id': 'R1', 'direction_id': '0', 'trip_headsign': 'End', 'trip_short_name': None},
+            {'trip_id': 'trip-3', 'route_id': 'R1', 'direction_id': '0', 'trip_headsign': 'End', 'trip_short_name': None},
         ]),
         'stops': pd.DataFrame([
             {'stop_id': '8501000:0:minor', 'stop_name': 'Minor Start', 'platform_code': None, 'original_stop_id': '8501000:0:minor', 'location_type': None, 'parent_station': None},

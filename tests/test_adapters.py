@@ -141,7 +141,6 @@ def test_generic_unknown_direction_is_optional_and_gtfs_namespace_is_resolved(tm
     osm.write_text(osm.read_text().replace('<tag k="ref_trips" v="T.H"/>', ''))
     output = run_gtfs(feed, osm, namespace='gtfs')
     assert output.routes['itinerary_matches'][0]['match_reason'] == 'ordered_stop_match_direction_unknown'
-    assert output.routes['itinerary_matches'][0]['direction_score'] == 0
     osm.write_text(osm.read_text().replace('<tag k="type" v="route"/>', '<tag k="type" v="route"/><tag k="ref_trips" v="T.R"/>'))
     assert run_gtfs(feed, osm, namespace='gtfs').routes['itinerary_matches'] == []
 

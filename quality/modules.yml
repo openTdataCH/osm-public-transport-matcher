@@ -116,7 +116,6 @@
         "source": [
           "src/osm_public_transport_matcher/acquisition/**/*.py",
           "src/osm_public_transport_matcher/adapters/**/*.py",
-          "src/osm_public_transport_matcher/integrations/**/*.py",
           "src/osm_public_transport_matcher/profiles/**/*.py",
           "src/osm_public_transport_matcher/swiss.py",
           "benchmarks/**/*.py"

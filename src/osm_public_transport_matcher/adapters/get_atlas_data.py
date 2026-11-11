@@ -175,7 +175,7 @@ def _build_match_lookup(integrated_data: pd.DataFrame) -> dict[str, dict[str, ob
 def _build_trip_lookup(gtfs_data) -> dict[str, dict[str, object]]:
     if not gtfs_data or not isinstance(gtfs_data, dict) or 'trips' not in gtfs_data:
         return {}
-    trip_columns = ['trip_id', 'route_id', 'direction_id', 'trip_headsign', 'trip_short_name', 'shape_id']
+    trip_columns = ['trip_id', 'route_id', 'direction_id', 'trip_headsign', 'trip_short_name']
     trips = gtfs_data['trips'][trip_columns]
     if gtfs_data.get('trip_patterns_path'):
         from .gtfs_columnar import connect
@@ -352,7 +352,6 @@ def _build_itinerary_frames(
                 trip_calls[column_name] = None
         trip_calls['trip_headsign'] = None
         trip_calls['trip_short_name'] = None
-        trip_calls['shape_id'] = None
         trip_calls['direction_id'] = trip_calls['direction_id'].apply(_safe_direction_id)
         trip_calls['canonical_stop_key'] = trip_calls['sloid'].where(
             trip_calls['sloid'].notna(),
@@ -424,8 +423,6 @@ def _build_itinerary_frames(
                 'direction_label': None,
                 'representative_headsign': representative_headsign,
                 'trip_count': trip_weight,
-                'shape_id': None,
-                'headsign_or_pattern_hash': itinerary_bucket_key,
             }
         else:
             existing_row['trip_count'] += trip_weight
@@ -439,7 +436,6 @@ def _build_itinerary_frames(
             pattern_candidates[fallback_pattern_hash] = {
                 'trip_count': trip_weight,
                 'stop_rows': stop_rows_for_itinerary,
-                'uic_sequence': [k.replace('uic:', '') for k in sequence_stop_keys],
                 'seen_stop_id_sequences': {ordered_stop_ids},
             }
             materialized_trip_pattern_count += 1
@@ -488,7 +484,6 @@ def _build_itinerary_frames(
                 item[0],
             ),
         )
-        itinerary_rows[itinerary_key]['shape_id'] = ">".join(selected_pattern['uic_sequence'])
         itinerary_rows[itinerary_key]['direction_label'] = _build_direction_label_from_stop_rows(selected_pattern['stop_rows'])
         stop_rows = selected_pattern['stop_rows']
         for stop_row in stop_rows:

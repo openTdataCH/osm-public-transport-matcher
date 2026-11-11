@@ -392,7 +392,6 @@ def _load_gtfs_metadata(gtfs_folder, stop_selector):
         'direction_id',
         'trip_headsign',
         'trip_short_name',
-        'shape_id',
     }
     trips_all = pd.read_csv(
         trips_path,
@@ -402,11 +401,10 @@ def _load_gtfs_metadata(gtfs_folder, stop_selector):
             'route_id': str,
             'trip_headsign': str,
             'trip_short_name': str,
-            'shape_id': str,
         },
         low_memory=False,
     )
-    for optional_column in ('direction_id', 'trip_headsign', 'trip_short_name', 'shape_id'):
+    for optional_column in ('direction_id', 'trip_headsign', 'trip_short_name'):
         if optional_column not in trips_all.columns:
             trips_all[optional_column] = pd.NA
     trips_all['direction_id'] = pd.to_numeric(trips_all['direction_id'], errors='coerce').astype('Int64')
@@ -522,7 +520,7 @@ def load_gtfs_data_streaming(gtfs_folder: str, *, stop_selector, stage_dir=None)
     if relevant_trip_ids:
         trips_df = trips_all[trips_all['trip_id'].astype(str).isin(relevant_trip_ids)].copy()
     else:
-        trips_df = pd.DataFrame(columns=['trip_id', 'route_id', 'direction_id', 'trip_headsign', 'trip_short_name', 'shape_id'])
+        trips_df = pd.DataFrame(columns=['trip_id', 'route_id', 'direction_id', 'trip_headsign', 'trip_short_name'])
     print(f"GTFS: loaded {len(trips_df):,} trips (filtered to relevant trips)")
 
     # Derive route_directions from per-trip global termini (first stop → last stop)
@@ -597,17 +595,13 @@ def load_gtfs_data_streaming(gtfs_folder: str, *, stop_selector, stage_dir=None)
 
 def build_integrated_gtfs_data_streaming(
     gtfs_data_streaming: Dict[str, pd.DataFrame],
-    traffic_points: pd.DataFrame,
-    gtfs_payload: Dict[str, object] | None = None,
-    stats_path: str | None = None,
+    gtfs_payload: Dict[str, object],
 ) -> pd.DataFrame:
     """Build the final integrated GTFS DataFrame using streaming outputs.
 
         Returns DataFrame with columns:
             ['stop_id', 'sloid', 'match_method', 'route_id', 'route_short_name', 'route_long_name', 'direction_id', 'direction']
     """
-    gtfs_payload = gtfs_payload or build_gtfs_atlas_payload(gtfs_data_streaming, traffic_points)
-
     # stop_id, route_id, direction_id
     stop_route_unique = gtfs_data_streaming['stop_route_unique']
     # add route metadata
@@ -626,14 +620,6 @@ def build_integrated_gtfs_data_streaming(
         )
     else:
         route_directions_unique = route_directions
-
-    if stats_path is not None:
-        import json
-        parent = os.path.dirname(stats_path)
-        if parent:
-            os.makedirs(parent, exist_ok=True)
-        with open(stats_path, 'w', encoding='utf-8') as handle:
-            json.dump(gtfs_payload['mapping_stats_export'], handle, indent=2)
 
     # integrate
     linked_stops = gtfs_payload['gtfs_stops'].merge(gtfs_payload['matches'], on='stop_id', how='left')
@@ -655,11 +641,10 @@ def build_gtfs_atlas_payload(gtfs_data_streaming: Dict[str, pd.DataFrame], traff
     this helper instead of rebuilding GTFS matching state separately.
     """
     gtfs_stops = parse_gtfs_stop_ids(gtfs_data_streaming['stops'])
-    matches, mapping_stats = match_gtfs_to_atlas({'stops': gtfs_stops}, traffic_points, return_stats=True)
+    matches, mapping_stats = match_gtfs_to_atlas({'stops': gtfs_stops}, traffic_points)
     return {
         'gtfs_stops': gtfs_stops,
         'matches': matches.copy(),
-        'mapping_stats': mapping_stats,
         'mapping_stats_export': _build_gtfs_atlas_stats(mapping_stats),
     }
 
@@ -753,7 +738,7 @@ def build_gtfs_db_payload_rows(
     return gtfs_stop_rows, gtfs_state_rows
 
 
-def match_gtfs_to_atlas(gtfs_data, traffic_points, return_stats: bool = False):
+def match_gtfs_to_atlas(gtfs_data, traffic_points):
     """Map GTFS stops to ATLAS SLOIDs using original_stop_id-first identity resolution.
 
     Resolution order:
@@ -923,7 +908,7 @@ def match_gtfs_to_atlas(gtfs_data, traffic_points, return_stats: bool = False):
 
     if combined.empty:
         print("stop_id→sloid: no matches found")
-        return (combined, mapping_stats) if return_stats else combined
+        return combined, mapping_stats
 
     print(
         f"stop_id→sloid: original_stop_id = {len(direct_original_matches):,}, "
@@ -931,4 +916,4 @@ def match_gtfs_to_atlas(gtfs_data, traffic_points, return_stats: bool = False):
         f"coordinate_proximity = {len(coordinate_matches):,}, "
         f"unique_fallback = {len(unique_fallback_matches):,}, total = {len(combined):,}"
     )
-    return (combined, mapping_stats) if return_stats else combined
+    return combined, mapping_stats

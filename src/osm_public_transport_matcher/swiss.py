@@ -74,7 +74,7 @@ def _map_gtfs_products(gtfs, traffic_points):
     from osm_public_transport_matcher.adapters.get_atlas_data import swiss_route_products
     with stage('gtfs.identity_matching'):
         identity = build_gtfs_atlas_payload(gtfs, traffic_points)
-        integrated = build_integrated_gtfs_data_streaming(gtfs, traffic_points, gtfs_payload=identity)
+        integrated = build_integrated_gtfs_data_streaming(gtfs, identity)
     with stage('gtfs.itineraries'):
         route_products = swiss_route_products(gtfs, integrated)
     with stage('gtfs.identity_export'):
@@ -175,7 +175,6 @@ def run_matching(
             'source': 'ATLAS', 'namespace': 'atlas',
             'inputs': [fingerprint(path) for path in input_paths],
             'attribution': {'source': 'opentransportdata.swiss', 'osm': '© OpenStreetMap contributors, ODbL'},
-            'gtfs_identity_statistics': gtfs_stats,
             'gtfs_geography_filter': 'explicit_boundary' if boundary_geojson else 'preselected_input',
             # Input problems that weakened this run without stopping it.
             'warnings': list(source_metadata.get('atlas_filtering', {}).get('warnings', [])),

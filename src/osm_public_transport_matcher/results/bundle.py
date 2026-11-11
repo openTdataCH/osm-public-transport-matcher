@@ -113,11 +113,7 @@ def _sections(result):
     extensions = dict(getattr(result, "extensions", {}) or {})
     extensions["duplicate_osm_group_map"] = result.duplicate_osm_group_map
     # Route evidence is part of the portable result, rather than a shared file path.
-    extensions["route_evidence"] = {
-        "source": result.source_route_evidence_by_key,
-        "osm": result.osm_node_routes,
-        "osm_name_directions": result.osm_name_dirs,
-    }
+    extensions["route_evidence"] = {"osm": result.osm_node_routes}
     return {
         "source_stops": source_rows(), "osm_nodes": osm_rows(),
         "matches": match_rows(), "unmatched": unmatched_rows(), "groups": group_rows(),

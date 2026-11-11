@@ -76,7 +76,6 @@ def test_score_itinerary_pair_requires_exact_direction_and_80_percent_stop_ratio
 
     assert score_row['matched_stop_count'] == 4
     assert score_row['stop_score'] == 0.8
-    assert score_row['direction_score'] == 1.0
     assert score_row['is_eligible'] is True
     assert score_row['match_reason'] == 'ordered_stop_match'
 
@@ -412,6 +411,22 @@ def test_year_ignored_route_id_needs_the_same_number_and_a_shared_stop():
     # A refused ID no longer blocks the OSM line with the same ID that runs there.
     links = _link_lines(gtfs, [('a', '36', 'bus', '92-36-D-j21-1', THUN), ('b', '36', 'bus', '92-36-D-j24-1', BERN)])
     assert links == {'b': ('92-36-D-j26-1', 'normalized_gtfs_route_id')}
+
+
+def test_two_osm_lines_with_one_route_id_the_same_number_wins_then_the_stops():
+    # Buses 521 and 523: both OSM lines carry the route ID of GTFS bus 521.
+    gtfs = [('96-729-j26-1', '521', '700', [BERN])]
+    links = _link_lines(gtfs, [('osm-523', '523', 'bus', '96-729-j26-1', BERN[:3] + THUN[:2]),
+                               ('osm-521', '521', 'bus', '96-729-j26-1', BERN)])
+    assert links == {'osm-521': ('96-729-j26-1', 'exact_gtfs_route_id')}
+    # With the same number on both, the line that serves more of the stops in order wins.
+    links = _link_lines(gtfs, [('part', '521', 'bus', '96-729-j26-1', BERN[:3] + THUN[:2]),
+                               ('whole', '521', 'bus', '96-729-j26-1', BERN)])
+    assert links == {'whole': ('96-729-j26-1', 'exact_gtfs_route_id')}
+    # The number counts before the stops: a line of another number does not win on its stops.
+    links = _link_lines(gtfs, [('other-number', '523', 'bus', '96-729-j26-1', BERN),
+                               ('same-number', '521', 'bus', '96-729-j26-1', BERN[:4] + THUN[:1])])
+    assert links == {'same-number': ('96-729-j26-1', 'exact_gtfs_route_id')}
 
 
 def test_stop_fallback_needs_the_same_number_and_mode():

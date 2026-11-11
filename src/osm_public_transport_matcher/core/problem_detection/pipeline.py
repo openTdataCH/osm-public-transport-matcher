@@ -1,13 +1,10 @@
 """
-Pipeline runner for problem detection on unmatched records.
+The problem rules, in the order they run.
 
-Provides ``STOP_PROBLEM_PIPELINE`` and the public
-``evaluate_unmatched_problems`` convenience helper. The engine runtime in
-``api.py`` iterates the pipeline directly so it can attach per-node evidence;
-matched records use ``MatchRecord.evaluate_matched_problems()``.
+``api.py`` iterates ``STOP_PROBLEM_PIPELINE`` for unmatched entities so it can
+attach per-node evidence; matched records use
+``MatchRecord.evaluate_matched_problems()``.
 """
-
-import logging
 
 from osm_public_transport_matcher.core.problem_detection.stop_predicates import (
     distance_problem,
@@ -17,8 +14,6 @@ from osm_public_transport_matcher.core.problem_detection.stop_predicates import 
     duplicates_problem,
 )
 
-logger = logging.getLogger(__name__)
-
 STOP_PROBLEM_PIPELINE = [
     distance_problem,
     attributes_problem,
@@ -26,17 +21,3 @@ STOP_PROBLEM_PIPELINE = [
     unmatched_problem,
     duplicates_problem,
 ]
-
-
-def evaluate_unmatched_problems(predicates, ctx, stop_dict):
-    """Run *predicates* sequentially, collecting ProblemResult lists."""
-    results = []
-    for predicate in predicates:
-        try:
-            results.extend(predicate(ctx, stop_dict))
-        except Exception:
-            logger.warning(
-                f"Problem predicate {predicate.__name__} failed",
-                exc_info=True,
-            )
-    return results

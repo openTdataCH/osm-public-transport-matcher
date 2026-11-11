@@ -181,7 +181,7 @@ class LocalRefDistancePredicate(BasePredicate):
             return
 
         coords = [(e.lat, e.lon) for e in unmatched]
-        batch_candidates = ctx.osm.batch_query_radius(coords, ctx.max_distance, include_stations=False)
+        batch_candidates = ctx.osm.batch_query_radius(coords, ctx.max_distance)
 
         for i, entry in enumerate(unmatched):
             desig = (entry.platform_code or '').strip()
@@ -234,7 +234,7 @@ class NearestDistancePredicate(BasePredicate):
             return
 
         coords = [(e.lat, e.lon) for e in unmatched]
-        batch_candidates = ctx.osm.batch_query_radius(coords, ctx.max_distance, include_stations=False)
+        batch_candidates = ctx.osm.batch_query_radius(coords, ctx.max_distance)
 
         for i, entry in enumerate(unmatched):
             # Collect all candidates within max_distance (already filters out used IDs & stations natively via KDTree)

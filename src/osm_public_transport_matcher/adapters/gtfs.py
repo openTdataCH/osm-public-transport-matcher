@@ -145,8 +145,7 @@ def _build_route_products(tables, namespace, by_id):
             'direction_id': trip.get('direction_id') or None,
             'direction_label': trip.get('trip_headsign') or None,
             'representative_headsign': trip.get('trip_headsign') or None,
-            'headsign_or_pattern_hash': digest, 'trip_count': 1,
-            'shape_id': trip.get('shape_id') or None,
+            'trip_count': 1,
             '_calls': calls,
         }
     itineraries, calls = [], []

@@ -21,9 +21,9 @@ make quality-fast PYTHON=.venv/bin/python
 make quality PYTHON=.venv/bin/python
 ```
 
-The optional extras and analyzer settings live in [pyproject.toml](../pyproject.toml).
-`quality` installs pytest, pytest-cov, Ruff, Hypothesis, JSON Schema validation,
-and Vulture. The full suite also needs the acquisition/GTFS/Swiss dependencies.
+The optional extras and analyser settings live in [pyproject.toml](../pyproject.toml).
+`quality` installs pytest, pytest-cov, Ruff, Hypothesis, and JSON Schema validation.
+The full suite also needs the acquisition/GTFS/Swiss dependencies.
 Installing the quality tools alone does not install all adapter dependencies.
 The `test` extra supports focused core tests; `mutation` is an additional,
 optional tool installation described below.
@@ -50,7 +50,7 @@ make -C ../engine quality-test \
   OUTPUT_DIR="$PWD/quality/raw"
 ```
 
-`MUTATION_TARGET` chooses the optional mutation sample. Standard analyzer
+`MUTATION_TARGET` chooses the optional mutation sample. Standard analyser
 variables such as `COVERAGE_FILE` and `RUFF_CACHE_DIR` can relocate scratch files;
 the app runner does this when the engine checkout is mounted read-only.
 
@@ -62,7 +62,7 @@ inputs when responsibilities or the public contract change:
 
 | Module | Responsibility and risk |
 |---|---|
-| `engine.core-matching` | Critical: normalized matching, allocation, route comparison, problem detection, and related progress/statistics support |
+| `engine.core-matching` | Critical: normalised matching, allocation, route comparison, problem detection, and related progress/statistics support |
 | `engine.integrations` | High: acquisition, adapters, dataset profiles, composition, caches, and acquisition benchmarks |
 | `engine.result-producer` | Critical: result validation/publication, public API and CLI, quality tooling, workflows, and deployment configuration |
 
@@ -111,12 +111,12 @@ generic public API does not import the dataset-profile package. See the
 assertions in [test_architecture.py](../tests/test_architecture.py).
 
 The engine's AST guard resolves absolute and relative static imports. Code under
-`src/osm_public_transport_matcher/core` cannot import acquisition, adapters, integrations,
+`src/osm_public_transport_matcher/core` cannot import acquisition, adapters,
 dataset profiles, results, Swiss composition, or the CLI. Every package source
 file is checked for imports of `backend` or `stop_sync_osm_atlas`. The combined
 app check also rejects review-framework dependencies from the engine and engine
 imports from the app. Parser/acquisition dependencies remain optional extras;
-normalized matching does not acquire external data.
+normalised matching does not acquire external data.
 
 These checks cover explicit import syntax. They do not prove every dynamic
 import or runtime dependency is safe. The public package facade necessarily
@@ -200,7 +200,7 @@ Mutation provenance requires a Git checkout even though ordinary fast checks can
 run from a source archive.
 
 A `killed` mutation was detected by a test. A `survived` mutation needs inspection:
-add a meaningful behavioral test if it exposes a gap, or document why the change
+add a meaningful behavioural test if it exposes a gap, or document why the change
 is equivalent. Timeouts, missing tests, and other incomplete outcomes are not
 kills. To inspect a reported name without altering production source:
 
@@ -210,7 +210,7 @@ kills. To inspect a reported name without altering production source:
 ```
 
 Use the actual name from your report; generated mutation identifiers can change.
-After strengthening a test, rerun the sample. The sample is currently advisory:
+After strengthening a test, rerun the sample. The sample is advisory:
 survivors do not make `make quality-mutation` fail merely because they survived.
 Tool failures, an empty target, and changed provenance do fail it. Review the
 artifact and scheduled job summary rather than interpreting a green process
@@ -228,21 +228,14 @@ Engine-only `make quality` does not run the app consumer or database tests.
 
 The app's quality runner records both revisions, source fingerprints, tool
 versions, and check results in `quality/raw/checks.json`. Its report generator
-aggregates engine coverage and tests by this catalog. Copying standalone coverage
-files alone does not establish that combined provenance; run the app's supported
-full command to collect current cross-repository evidence.
+(`python scripts/quality.py report`) aggregates engine coverage, JUnit test results,
+duplicated-block findings, and the static code map into `quality/evidence.json`.
+Copying standalone coverage files alone does not establish that combined provenance;
+run the app's supported full command to collect current cross-repository evidence.
 
-The app full run clears its raw directory before collection. To include an
-independently collected mutation sample, finish the full run first, then copy
-`engine-mutation.json` into the app's `quality/raw` directory and regenerate the
-app report with `python scripts/quality.py report` in its
-supported Python environment. The consumer checks the sample's source/test
-hashes and requires a start time within the last seven days, allowing five
-minutes of clock skew. Missing, changed, or old evidence is displayed as unmeasured,
-invalid, or stale. A valid sample applies only to `engine.result-producer`.
-
-For combined commands and publishing the generated portal artifacts, see the
-[application quality guide](https://github.com/openTdataCH/stop_sync_osm_atlas/blob/main/quality/README.md).
+For combined commands and how the dashboard loads `quality/evidence.json`, see
+[A4.3 Code quality](https://github.com/openTdataCH/stop_sync_osm_atlas/blob/main/documentation/4.3%20Code%20quality.md)
+and [A4.4 Running the quality checks](https://github.com/openTdataCH/stop_sync_osm_atlas/blob/main/documentation/4.4%20Running%20the%20quality%20checks.md).
 Source revisions and hashes are evidence identifiers, not a deployment step.
 
 ## CI, baselines, and remaining limits
@@ -262,7 +255,7 @@ are sent. Repository administrators still need to select required checks in
 branch protection; a workflow file cannot configure that policy itself.
 
 [security.yml](../.github/workflows/security.yml) runs on pull requests, Mondays
-at 04:27 UTC, and manual dispatch. Python CodeQL analyzes `src` and publishes
+at 04:27 UTC, and manual dispatch. Python CodeQL analyses `src` and publishes
 findings to GitHub code scanning. The dependency job installs the engine with
 all production extras (`acquisition`, `swiss`, and `gtfs`) in a fresh, separate
 virtual environment. Pip's installation report supplies the exact resolved
@@ -284,16 +277,16 @@ per-module security percentage. Repository administrators must make the security
 checks and desired CodeQL severity policy required in branch protection; CodeQL
 workflow completion alone does not reject every finding.
 
-Structural clone/dead-code baselines and expiring exceptions live in the
-application's `quality/` directory and cover the combined ownership map. The
-standalone engine command enforces Ruff's unused-code findings but does not run
-that combined jscpd/Vulture ratchet. Baseline refreshes are deliberate, reviewed
+The duplicated-block baseline (`quality/baseline.json`) lives in the
+application's `quality/` directory and covers both repositories. The
+standalone engine command enforces Ruff's unused-code findings (`F401`, `F841`)
+while the combined app runner checks jscpd clones and lists unreferenced functions
+on the code map. Baseline refreshes are deliberate, reviewed
 changes after fixing findings; do not refresh merely to make a new clone pass.
-Branch floors and changed-line coverage remain advisory during initial baseline
-collection. There is no weighted quality score or broad mutation threshold.
+There is no weighted quality score or broad mutation threshold.
 
-A combined report can remain `partial` when required checks pass because some
-lanes are intentionally not measured. Security job artifacts do not yet imply
+A combined report is marked `partial` when required checks pass while some
+module test or coverage inputs were not collected. Security job artifacts do not imply
 per-module security measurements. Broad mutation coverage, type checking, full
 browser E2E/visual checks, performance/query budgets, and historical agent
 regression evaluations require separately reviewed work. Do not present those

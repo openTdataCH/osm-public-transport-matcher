@@ -56,10 +56,10 @@ def main(argv=None):
 def _execute(args):
     metadata = {}
     if args.command == "swiss":
-        from osm_public_transport_matcher.integrations.swiss import run_matching
+        from osm_public_transport_matcher.swiss import run_matching
         workspace = args.workspace.resolve() if args.workspace else None
         if args.download:
-            from osm_public_transport_matcher.integrations.swiss import refresh_swiss
+            from osm_public_transport_matcher.adapters.acquisition import refresh_swiss
             metadata["acquisition"] = refresh_swiss(workspace, force=args.force)
             args.boundary = args.boundary or workspace / "data/raw/switzerland.geojson"
         elif workspace and not args.gtfs and all((

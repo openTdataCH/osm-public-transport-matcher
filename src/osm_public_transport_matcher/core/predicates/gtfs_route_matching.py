@@ -105,7 +105,7 @@ class GtfsRoutePredicate(BasePredicate):
             return
 
         coords = [(e.lat, e.lon) for e in unmatched]
-        batch_candidates = ctx.osm.batch_query_radius(coords, ctx.max_distance, include_stations=False)
+        batch_candidates = ctx.osm.batch_query_radius(coords, ctx.max_distance)
         token_edges: list[dict] = []
         direction_edges: list[dict] = []
 

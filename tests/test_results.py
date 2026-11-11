@@ -81,8 +81,8 @@ def test_route_result_foreign_keys_are_validated(tmp_path):
 
 def test_route_evidence_foreign_keys_are_validated(tmp_path):
     result = example()
-    result.source_route_evidence_by_key['missing:source'] = {'gtfs': []}
-    with pytest.raises(InvalidResult, match='Route evidence references unknown source'):
+    result.osm_node_routes['missing'] = []
+    with pytest.raises(InvalidResult, match='Route evidence references unknown OSM stop'):
         write_bundle(result, tmp_path / 'bad')
 
 

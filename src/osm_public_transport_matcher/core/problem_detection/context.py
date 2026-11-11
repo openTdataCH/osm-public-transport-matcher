@@ -29,11 +29,6 @@ if TYPE_CHECKING:
 # Configuration constants
 # ---------------------------------------------------------------------------
 
-# Attribute check toggles
-ENABLE_OPERATOR_MISMATCH_CHECK = True
-ENABLE_NAME_MISMATCH_CHECK = True
-ENABLE_UIC_MISMATCH_CHECK = True
-ENABLE_LOCAL_REF_MISMATCH_CHECK = True
 
 
 def _safe(val):

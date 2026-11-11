@@ -189,10 +189,7 @@
       "line_family_match_id": 1,
       "source_itinerary_id": 1,
       "osm_itinerary_id": 2,
-      "direction_score": 1.0,
       "stop_score": 1.0,
-      "geometry_score": null,
-      "overall_score": 1.0,
       "match_reason": "ordered_stop_match"
     }
   ]

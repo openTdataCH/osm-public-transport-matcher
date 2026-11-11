@@ -76,7 +76,7 @@ Rows refer to entities by key, never by position.
 
 ## Matches and unmatched entities
 
-- A match links two existing entities and has a finite, non-negative `distance_m` in metres. `method` is the [match type](https://github.com/openTdataCH/stop_sync_osm_atlas/blob/main/documentation/0.5%20Glossary.md#match-type): the rule and branch that decided the match, such as `uic_reference_local_ref` or `gtfs_shared_route` ([E2](2.%20Matching%20process.md#the-matching-rules)).
+- A match links two existing entities and has a finite, non-negative `distance_m` in metres. `method` is the [match type](https://github.com/openTdataCH/stop_sync_osm_atlas/blob/main/documentation/0.4%20Glossary.md#match-type): the rule and branch that decided the match, such as `uic_reference_local_ref` or `gtfs_shared_route` ([E2](2.%20Matching%20process.md#the-matching-rules)).
 - An entity can have several matches when the profile allows it, but the same pair never appears twice.
 - Every entity appears either in `matches` or in `unmatched`, never in both and never in neither.
 - `isolated` is true when no element of the other side lies within the profile's isolation radius.
@@ -115,10 +115,10 @@ The `routes` section holds one row per collection. Each `value` is the complete 
 | `source_routes` | route of the source timetable | `route_id`, `route_id_normalized`, `agency_id`, `route_short_name`, `route_long_name`, `route_desc`, `route_type` |
 | `osm_route_relations` | OSM `type=route` relation | `relation_id`, `route`, `ref`, `name`, `from_name`, `to_name`, `operator`, `network`, `gtfs_route_id`, `route_master_id` and further PTv2 tags |
 | `line_families` | line on either side | `id`, `side`, `key`, `family_origin`, `public_name`, `ref`, `operator`, `gtfs_route_id`, `normalized_route_id`, `display_route_id` |
-| `itineraries` | direction or variant on either side | `id`, `side`, `key`, `line_family_id`, `direction_id`, `display_name`, `representative_headsign`, `trip_count`, `shape_id`, `headsign_or_pattern_hash`, `canonical_stop_count` |
+| `itineraries` | direction or variant on either side | `id`, `side`, `key`, `line_family_id`, `direction_id`, `display_name`, `representative_headsign`, `trip_count`, `canonical_stop_count` |
 | `stop_calls` | stop of an itinerary, in order | `id`, `itinerary_id`, `stop_sequence`, `source_stop_id`, `source_stop_key`, `source_stop_key_variants`, `osm_node_id`, `canonical_stop_key`, `stop_label`, `station_ref`, `platform_code` (source), `member_role` (OSM), position |
 | `line_family_matches` | matched pair of families | `id`, `source_line_family_id`, `osm_line_family_id`, `match_method` ([E3.2](3.2%20Route-route%20matching.md#step-2-match-the-families)) |
-| `itinerary_matches` | matched pair of itineraries | `id`, `line_family_match_id`, `source_itinerary_id`, `osm_itinerary_id`, the scores and `match_reason` ([E3.2](3.2%20Route-route%20matching.md#step-4-pair-the-itineraries)) |
+| `itinerary_matches` | matched pair of itineraries | `id`, `line_family_match_id`, `source_itinerary_id`, `osm_itinerary_id`, `stop_score` and `match_reason` ([E3.2](3.2%20Route-route%20matching.md#step-4-pair-the-itineraries)) |
 
 Two counters complete the section: `matched_routes`, the number of family matches, and `unknown_source_stop_references`, the number of source stop calls whose stop is not among the bundle's source stops.
 
@@ -133,7 +133,7 @@ Two counters complete the section: `matched_routes`, the number of family matche
 
 | Extension | Content |
 |---|---|
-| `route_evidence` | Source route memberships, OSM route memberships and OSM direction names used during matching |
+| `route_evidence` | `osm`: the route memberships of each OSM element, as used during matching |
 | `duplicate_osm_group_map` | OSM elements sharing UIC reference and local reference, used for duplicate problems; distinct from stop units |
 | `quality_metrics` | Matching quality summaries |
 | `gtfs_stops`, `gtfs_atlas_state`, `gtfs_atlas_stats`, `atlas_filtering` | Optional Swiss GTFS identity and ATLAS acquisition details |

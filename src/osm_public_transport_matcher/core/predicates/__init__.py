@@ -17,9 +17,8 @@ class BasePredicate(ABC):
     utilizes the `ctx.commit(...)` transactional API instead of returning loose dictionaries.
     """
 
-    def __init__(self, name: Optional[str] = None, max_distance: float = 50.0):
+    def __init__(self, name: Optional[str] = None):
         self._name = name or self.__class__.__name__
-        self.max_distance = max_distance
 
     @property
     def name(self) -> str:

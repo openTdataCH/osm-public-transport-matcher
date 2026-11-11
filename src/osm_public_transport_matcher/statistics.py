@@ -161,49 +161,14 @@ def compute_quality_metrics(
         "consistency_percent": consistency_pct,
     }
 
-    # ------------------------------------------------------------------
-    # 4. OSM stop-unit grouping stats
-    # ------------------------------------------------------------------
-    osm_stop_units = osm_stop_units or []
-
-    matched_osm_ids = set()
-    for rec in matched_records:
-        osm_id = getattr(getattr(rec, 'osm_node', None), 'node_id', None)
-        if osm_id:
-            matched_osm_ids.add(str(osm_id))
-
-    grouped_units = [u for u in osm_stop_units if getattr(u, 'stop_kind', 'single') in ('pair', 'two_sided_stop')]
-    total_groups = len(grouped_units)
-    by_type: Dict[str, int] = defaultdict(int)
-    both_matched = 0
-    neither_matched = 0
-
-    for stop_unit in grouped_units:
-        group_key = getattr(stop_unit, 'group_kind', None) or getattr(stop_unit, 'stop_kind', 'unknown')
-        by_type[group_key] += 1
-        member_ids = [str(member.node_id) for member in getattr(stop_unit, 'members', [])]
-        if any(member_id in matched_osm_ids for member_id in member_ids):
-            both_matched += 1
-        else:
-            neither_matched += 1
-
-    osm_group_stats = {
-        "total_groups": total_groups,
-        "by_type": dict(by_type),
-        "both_members_matched": both_matched,
-        "neither_matched": neither_matched,
-    }
-
     logger.info(
         f"Quality metrics: consistency={consistency_pct}%, "
-        f"not_closest={not_closest_count}, many_to_one_source={len(source_multi)}, "
-        f"osm_groups={total_groups}"
+        f"not_closest={not_closest_count}, many_to_one_source={len(source_multi)}"
     )
 
     return {
         "distance_quality": distance_quality,
         "many_to_one": many_to_one,
         "cross_predicate_consistency": cross_predicate,
-        "osm_groups": osm_group_stats,
     }
 
