@@ -189,10 +189,15 @@ def validate_records(records):
         for row in records[section]:
             key = row.get('kind')
             _require(isinstance(key, str) and key and key not in values, f'Invalid {section} entry')
+            _require('value' in row, f'Missing {section} entry value')
             values[key] = row.get('value')
         if section == 'routes':
             _validate_routes(values, set(source))
         else:
+            for name in ('route_evidence', 'duplicate_osm_group_map', 'quality_metrics', 'gtfs_atlas_stats', 'atlas_filtering'):
+                _require(name not in values or isinstance(values[name], dict), f'Invalid {name} extension')
+            for name in ('gtfs_stops', 'gtfs_atlas_state'):
+                _require(name not in values or (isinstance(values[name], list) and all(isinstance(row, dict) for row in values[name])), f'Invalid {name} extension')
             evidence = values.get('route_evidence') or {}
             _require(set(evidence.get('source', {})) <= source.keys(), 'Route evidence references unknown source stop')
             _require(set(evidence.get('osm', {})) <= osm_by_id.keys(), 'Route evidence references unknown OSM stop')

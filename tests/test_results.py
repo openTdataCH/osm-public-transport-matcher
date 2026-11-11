@@ -86,6 +86,27 @@ def test_route_evidence_foreign_keys_are_validated(tmp_path):
         write_bundle(result, tmp_path / 'bad')
 
 
+@pytest.mark.parametrize('extensions,message', [
+    ({'atlas_filtering': None}, 'Invalid atlas_filtering extension'),
+    ({'gtfs_stops': [['not', 'a', 'row']]}, 'Invalid gtfs_stops extension'),
+])
+def test_extensions_have_the_documented_shape(tmp_path, extensions, message):
+    """The producer refuses what the consumer would refuse."""
+    result = example()
+    result.extensions.update(extensions)
+    with pytest.raises(InvalidResult, match=message):
+        write_bundle(result, tmp_path / 'bad')
+
+
+def test_routes_and_extensions_entries_need_a_value(tmp_path):
+    from osm_public_transport_matcher.results.validation import validate_records
+
+    _, rows = read_sections(write_bundle(example(), tmp_path / 'run'))
+    del rows['extensions'][0]['value']
+    with pytest.raises(InvalidResult, match='Missing extensions entry value'):
+        validate_records(rows)
+
+
 def test_existing_directory_is_never_overwritten_even_when_empty(tmp_path):
     path = tmp_path / 'existing'
     path.mkdir()
