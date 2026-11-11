@@ -112,7 +112,9 @@ def _calls(*stops):
 
 
 def _pair(source_itineraries, osm_itineraries, calls):
-    scores = {(source['id'], osm['id']): _score_itinerary_pair(source, osm, calls[source['id']], calls[osm['id']])
+    """Pair as the profiles do: an unknown direction does not refuse a pair."""
+    scores = {(source['id'], osm['id']): _score_itinerary_pair(source, osm, calls[source['id']], calls[osm['id']],
+                                                               require_direction_match=False)
               for source in source_itineraries for osm in osm_itineraries}
     return [(source['id'], osm['id']) for source, osm, _ in
             _choose_best_itinerary_pairs(source_itineraries, osm_itineraries, scores)]
@@ -148,6 +150,48 @@ def test_shared_platforms_break_a_tie_between_variants_serving_the_same_stations
     sources = [{'id': 1, 'direction_id': '0'}, {'id': 2, 'direction_id': '0'}]
 
     assert _pair(sources, [{'id': 10, 'direction_id': '0'}], calls) == [(2, 10)]
+
+
+def test_a_relation_without_a_direction_pairs_with_the_itinerary_run_its_way():
+    # IR 46: neither relation has ref_trips. Each one has the stops of one
+    # source itinerary in order, and those of the other in reverse.
+    outward = [(station, 0) for station in range(1, 7)]
+    calls = {1: _calls(*outward), 2: _calls(*reversed(outward)),
+             10: _calls(*outward), 11: _calls(*reversed(outward))}
+    sources = [{'id': 1, 'direction_id': '0'}, {'id': 2, 'direction_id': '1'}]
+    relations = [{'id': 10, 'direction_id': None}, {'id': 11, 'direction_id': None}]
+
+    assert _pair(sources, relations, calls) == [(1, 10), (2, 11)]
+    score = _score_itinerary_pair(sources[0], relations[0], calls[1], calls[10], require_direction_match=False)
+    assert score['match_reason'] == 'ordered_stop_match_direction_unknown'
+    # A profile that requires the direction refuses the same pair.
+    required = _score_itinerary_pair(sources[0], relations[0], calls[1], calls[10])
+    assert required['match_reason'] == 'direction_mismatch' and not required['is_eligible']
+
+
+def test_two_known_different_directions_are_never_paired():
+    stops = [(station, 0) for station in range(1, 7)]
+    calls = {1: _calls(*stops), 10: _calls(*stops)}
+
+    assert _pair([{'id': 1, 'direction_id': '0'}], [{'id': 10, 'direction_id': '1'}], calls) == []
+
+
+def test_a_pair_with_equal_directions_comes_before_one_with_an_unknown_direction():
+    # S36 Bülach -> Koblenz: the itineraries to Koblenz and to Waldshut have the
+    # same stops in Switzerland. The relation with ref_trips keeps the partner
+    # it has when the direction is required; the one without takes the other.
+    stops = [(station, 0) for station in range(1, 7)]
+    calls = {1: _calls(*stops), 2: _calls(*stops), 10: _calls(*stops), 11: _calls(*stops)}
+    sources = [{'id': 1, 'direction_id': '0'}, {'id': 2, 'direction_id': '0'}]
+    relations = [{'id': 10, 'direction_id': None}, {'id': 11, 'direction_id': '0'}]
+
+    assert _pair(sources, relations, calls) == [(1, 11), (2, 10)]
+
+
+def test_the_swiss_profile_pairs_relations_without_a_direction():
+    from osm_public_transport_matcher.profiles import SWITZERLAND
+
+    assert SWITZERLAND.itinerary_require_direction is False
 
 
 def test_build_itinerary_rows_prefers_osm_from_to_for_display_and_to_for_headsign():

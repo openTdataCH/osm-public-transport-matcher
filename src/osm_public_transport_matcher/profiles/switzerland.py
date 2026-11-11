@@ -23,7 +23,6 @@ SWITZERLAND = MatchingProfile(
     preserve_name_alias_multiplicity=True,
     distance_priority_exempt_operators=('SBB',),
     osm_grouping=True,
-    itinerary_require_direction=True,
     name_match_max_distance=None,
     reference_rules=(ReferenceRule('uic', 'uic_ref', scope='station', source_namespace='atlas'),),
     identifier_rules=(IdentifierRule('sloid', STOP_IDENTIFIER_KEYS, pattern=SLOID_PATTERN, source_namespace='atlas'),),

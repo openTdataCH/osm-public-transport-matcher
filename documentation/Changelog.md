@@ -14,7 +14,7 @@ First public release. The matching code of the review application becomes a pack
 
 - **Source-neutral core** — Stop matching, problem detection, route comparison and quality metrics run on normalized records, without file, network or database access. A `MatchingProfile` holds the rule order and thresholds; `profiles.SWITZERLAND` is the Swiss policy, and the generic default needs no SLOID or UIC identifiers.
 - **Stop matching rules** — Identifier, reference, name, GTFS route and distance rules, in that order. Each match names the rule and branch that decided it, such as `sloid_identifier` or `gtfs_shared_route`. See [E2](2.%20Matching%20process.md#the-matching-rules).
-- **Route comparison** — `compare_routes()` links source lines to OSM PTv2 route relations by route ID or by line number and shared stops, then pairs their itineraries stop by stop, counting another platform of the same station as the same stop. See [E3.2](3.2%20Route-route%20matching.md).
+- **Route comparison** — `compare_routes()` links source lines to OSM PTv2 route relations by route ID or by line number and shared stops, then pairs their itineraries stop by stop, counting another platform of the same station as the same stop. A relation without `ref_trips` has no direction and is paired on its stops in order; two different known directions are never paired. See [E3.2](3.2%20Route-route%20matching.md).
 - **Problems** — Distance, unmatched, attribute, route contradiction, duplicate, disused and identifier problems, each with a priority from P1 to P3. See [E4.1](4.1%20Stop%20problems.md).
 
 ### Inputs
