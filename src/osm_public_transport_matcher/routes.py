@@ -9,7 +9,8 @@ bundle's ``routes`` section.
 from __future__ import annotations
 
 import json
-from collections import Counter, defaultdict
+from collections import defaultdict
+from dataclasses import dataclass, field
 from itertools import count
 from typing import Any
 
@@ -618,46 +619,47 @@ def _build_itinerary_rows(
     return itinerary_rows, stop_call_rows, stop_calls_by_itinerary_id
 
 
-def _candidate_line_family_pairs(source_families, osm_families):
+# How an OSM route ID names a source line, strongest first; each is a ``match_method``.
+_ROUTE_ID_KINDS = ('exact_gtfs_route_id', 'normalized_gtfs_route_id', 'display_route_id_match')
+_YEAR_IGNORED_ROUTE_ID = 'normalized_gtfs_route_id'
+_NO_ROUTE_ID_METHOD = 'line_number_and_stops'
+
+
+def _route_id_kind(source_family: dict[str, Any], osm_family: dict[str, Any]) -> str | None:
+    """How the OSM line's route ID names the source line: exactly, with the timetable year ignored, or as its display ID."""
+    source_route_id = _to_text(source_family.get('gtfs_route_id'))
+    source_normalized = _to_text(source_family.get('normalized_route_id'))
+    if source_route_id and source_route_id == _to_text(osm_family.get('gtfs_route_id')):
+        return 'exact_gtfs_route_id'
+    if source_normalized and source_normalized == _to_text(osm_family.get('normalized_route_id')):
+        return _YEAR_IGNORED_ROUTE_ID
+    if source_route_id and source_route_id == _to_text(osm_family.get('display_route_id')):
+        return 'display_route_id_match'
+    return None
+
+
+def _lines_named_by_route_id(source_families, osm_families) -> dict[tuple[int, int], str]:
+    """The pairs of a source line and an OSM line whose route ID names it, with the kind of ID.
+
+    Only pairs reachable through the three identifier indexes are looked at,
+    which gives the same result as comparing every pair.
+    """
     indexes = {key: defaultdict(list) for key in ('gtfs_route_id', 'normalized_route_id', 'display_route_id')}
     for osm in osm_families:
-        if not osm.get('is_non_gtfs'):
-            for key, index in indexes.items():
-                value = _to_text(osm.get(key))
-                if value:
-                    index[value].append(osm)
-    candidates = []
+        for key, index in indexes.items():
+            value = _to_text(osm.get(key))
+            if value:
+                index[value].append(osm)
+    named = {}
     for source in source_families:
-        possible = {}
         for key, value in (('gtfs_route_id', source.get('gtfs_route_id')),
                            ('normalized_route_id', source.get('normalized_route_id')),
                            ('display_route_id', source.get('gtfs_route_id'))):
             for osm in indexes[key].get(_to_text(value), ()):
-                possible[osm['id']] = osm
-        for osm in possible.values():
-            score, reason = _score_line_family_pair(source, osm)
-            if score > 0 and reason:
-                candidates.append((score, source, osm, reason))
-    return candidates
-
-
-def _score_line_family_pair(source_family: dict[str, Any], osm_family: dict[str, Any]) -> tuple[float, str | None]:
-    if source_family['side'] != 'source' or osm_family['side'] != 'osm':
-        return 0.0, None
-
-    source_route_id = _to_text(source_family.get('gtfs_route_id'))
-    source_normalized = _to_text(source_family.get('normalized_route_id'))
-
-    osm_gtfs_route_id = _to_text(osm_family.get('gtfs_route_id'))
-    osm_normalized = _to_text(osm_family.get('normalized_route_id'))
-
-    if source_route_id and osm_gtfs_route_id and source_route_id == osm_gtfs_route_id:
-        return 1.0, 'exact_gtfs_route_id'
-    if source_normalized and osm_normalized and source_normalized == osm_normalized:
-        return 0.95, 'normalized_gtfs_route_id'
-    if source_route_id and _to_text(osm_family.get('display_route_id')) == source_route_id:
-        return 0.9, 'display_route_id_match'
-    return 0.0, None
+                kind = _route_id_kind(source, osm)
+                if kind:
+                    named[(source['id'], osm['id'])] = kind
+    return named
 
 
 # The mode of a line, from the OSM route tag or the GTFS route type (basic and
@@ -676,12 +678,11 @@ _MODE_BY_GTFS_EXTENDED_TYPE = (
     (900, 999, 'tram'), (1000, 1099, 'ferry'), (1200, 1299, 'ferry'), (1300, 1399, 'aerialway'),
     (1400, 1499, 'funicular'),
 )
-# A line linked by number and stops shares this many stops, or every stop of
-# the line that has fewer, but never fewer than two; its score must lead the
-# next candidate's by this margin, on both sides.
-_LINE_FALLBACK_MIN_SHARED_STOPS = 4
-_LINE_FALLBACK_FEWEST_SHARED_STOPS = 2
-_LINE_FALLBACK_MIN_MARGIN = 0.1
+# The stops of two lines agree when one itinerary of each shares this many stops
+# and reaches the itinerary ratio: one shared stop shows no order. Of two OSM
+# lines that carry one route ID, the stop score of one must lead by this margin.
+_LINE_MIN_SHARED_STOPS = 2
+_ROUTE_ID_MIN_LEAD = 0.1
 
 
 def _line_mode(family: dict[str, Any]) -> str | None:
@@ -707,117 +708,137 @@ def _line_number_keys(ref: Any, alias=None) -> frozenset[str]:
     return frozenset(''.join(value.split()).casefold() for value in values)
 
 
-class _LineEvidence:
-    """What two lines share beyond the route ID: mode, line number and stops.
+@dataclass(frozen=True)
+class _LineCandidate:
+    """A source line and an OSM line that could be the same line, with what they share.
 
-    A line's stops are the resolved source stop keys of all its itineraries,
-    the identity that itinerary pairing uses.
+    A line has no stops of its own. What two lines share is what one itinerary
+    of each shares, scored as in itinerary pairing: ``stop_score`` is the best
+    stop ratio of two itineraries that share ``_LINE_MIN_SHARED_STOPS``,
+    whatever their direction, and ``scores`` keeps every pair for the pairing.
     """
 
-    def __init__(self, families, itineraries_by_family_id, stop_calls_by_itinerary_id, line_number_alias=None):
-        self._itineraries = itineraries_by_family_id
-        self._calls = stop_calls_by_itinerary_id
-        self._modes = {family['id']: _line_mode(family) for family in families}
-        self._numbers = {family['id']: _line_number_keys(family.get('ref'), line_number_alias) for family in families}
-        self.stop_keys = {}
-        for family_id, itineraries in itineraries_by_family_id.items():
-            keys = set()
-            for itinerary in itineraries:
-                for call in stop_calls_by_itinerary_id.get(itinerary['id'], ()):
-                    keys |= _stop_identity(call)[0]
-            self.stop_keys[family_id] = keys
-        self._scores: dict[tuple[int, int], float] = {}
+    source_id: int
+    osm_id: int
+    route_id: str | None  # one of _ROUTE_ID_KINDS, or None
+    same_number: bool
+    stop_score: float
+    shares_a_stop: bool
+    scores: dict[tuple[int, int], dict[str, Any]] = field(default_factory=dict, compare=False, repr=False)
 
-    def same_line_number(self, family_id: int, other_id: int) -> bool:
-        return bool(self._numbers.get(family_id, frozenset()) & self._numbers.get(other_id, frozenset()))
-
-    def comparable(self, family_id: int, other_id: int) -> bool:
-        """Same known mode and same line number."""
-        mode = self._modes.get(family_id)
-        return mode is not None and mode == self._modes.get(other_id) and self.same_line_number(family_id, other_id)
-
-    def required_shared_stops(self, family_id: int, other_id: int) -> int:
-        """Four stops, or every stop of the line with fewer, as a two-station cableway; never fewer than two."""
-        fewest = min(len(self.stop_keys.get(family_id, ())), len(self.stop_keys.get(other_id, ())))
-        return max(_LINE_FALLBACK_FEWEST_SHARED_STOPS, min(_LINE_FALLBACK_MIN_SHARED_STOPS, fewest))
-
-    def shares_a_stop(self, family_id: int, other_id: int) -> bool:
-        return not self.stop_keys.get(family_id, set()).isdisjoint(self.stop_keys.get(other_id, set()))
-
-    def line_score(self, source_family_id: int, osm_family_id: int) -> float:
-        """The best stop ratio of any pair of their itineraries, whatever the direction."""
-        key = (source_family_id, osm_family_id)
-        if key not in self._scores:
-            best = 0.0
-            for source_itinerary in self._itineraries.get(source_family_id, ()):
-                source_calls = self._calls.get(source_itinerary['id'], [])
-                for osm_itinerary in self._itineraries.get(osm_family_id, ()):
-                    osm_calls = self._calls.get(osm_itinerary['id'], [])
-                    longer = max(len(source_calls), len(osm_calls))
-                    # The shorter itinerary bounds the ratio; skip pairs that cannot beat the best.
-                    if not source_calls or not osm_calls or min(len(source_calls), len(osm_calls)) / longer <= best:
-                        continue
-                    best = max(best, round(_count_stop_sequence_matches(source_calls, osm_calls) / longer, 4))
-            self._scores[key] = best
-        return self._scores[key]
+    @property
+    def match_method(self) -> str:
+        return self.route_id or _NO_ROUTE_ID_METHOD
 
 
-def _route_id_confirmed(evidence: _LineEvidence, source_family_id: int, osm_family_id: int) -> bool:
-    """A route ID equal only with the timetable year ignored must name a line with the same number and a shared stop.
+def _line_candidates(source_families, osm_families, itineraries_by_family_id, stop_calls_by_itinerary_id, *,
+                     line_number_alias=None, require_direction_match: bool = True,
+                     min_stop_ratio: float = _ITINERARY_MATCH_MIN_RATIO) -> list[_LineCandidate]:
+    """Every source line and OSM line that could be the same line, with their itineraries compared.
 
-    Between timetable years a route ID can pass to another line, often one with
-    the same number in another town; the shared stop tells them apart.
+    Two lines are candidates when the OSM route ID names the source line, or
+    when they have the same known mode and the same line number. OSM lines
+    marked ``is_non_gtfs`` are never candidates. Two lines without a stop in
+    common score nothing, so the candidates by mode and number are searched
+    through the stops they serve.
     """
-    return (evidence.same_line_number(source_family_id, osm_family_id)
-            and evidence.shares_a_stop(source_family_id, osm_family_id))
+    osm_families = [family for family in osm_families if not family.get('is_non_gtfs')]
+    families = (*source_families, *osm_families)
+    modes = {family['id']: _line_mode(family) for family in families}
+    numbers = {family['id']: _line_number_keys(family.get('ref'), line_number_alias) for family in families}
+
+    def stops_served(family_id):
+        stops = set()
+        for itinerary in itineraries_by_family_id.get(family_id, ()):
+            for call in stop_calls_by_itinerary_id.get(itinerary['id'], ()):
+                platforms, station = _stop_identity(call)
+                stops.update(('platform', key) for key in platforms)
+                if station:
+                    stops.add(('station', station))
+        return stops
+
+    source_lines_by_stop = defaultdict(set)
+    for family in source_families:
+        if modes[family['id']] is not None and numbers[family['id']]:
+            for stop in stops_served(family['id']):
+                source_lines_by_stop[stop].add(family['id'])
+
+    named = _lines_named_by_route_id(source_families, osm_families)
+    pairs = set(named)
+    for family in osm_families:
+        osm_id = family['id']
+        if modes[osm_id] is None:
+            continue
+        for source_id in {line for stop in stops_served(osm_id) for line in source_lines_by_stop.get(stop, ())}:
+            if modes[source_id] == modes[osm_id] and numbers[source_id] & numbers[osm_id]:
+                pairs.add((source_id, osm_id))
+
+    candidates = []
+    for source_id, osm_id in sorted(pairs):
+        scores = {}
+        for source_itinerary in itineraries_by_family_id.get(source_id, ()):
+            source_calls = stop_calls_by_itinerary_id.get(source_itinerary['id'], [])
+            for osm_itinerary in itineraries_by_family_id.get(osm_id, ()):
+                scores[(source_itinerary['id'], osm_itinerary['id'])] = _score_itinerary_pair(
+                    source_itinerary,
+                    osm_itinerary,
+                    source_calls,
+                    stop_calls_by_itinerary_id.get(osm_itinerary['id'], []),
+                    require_direction_match=require_direction_match,
+                    min_stop_ratio=min_stop_ratio,
+                )
+        candidates.append(_LineCandidate(
+            source_id=source_id,
+            osm_id=osm_id,
+            route_id=named.get((source_id, osm_id)),
+            same_number=bool(numbers[source_id] & numbers[osm_id]),
+            stop_score=max((row['stop_score'] for row in scores.values()
+                            if row['matched_stop_count'] >= _LINE_MIN_SHARED_STOPS), default=0.0),
+            shares_a_stop=any(row['matched_stop_count'] for row in scores.values()),
+            scores=scores,
+        ))
+    return candidates
 
 
-def _link_lines_by_number_and_stops(source_families, osm_families, linked_source_ids, linked_osm_ids,
-                                    evidence: _LineEvidence, min_stop_ratio: float):
-    """Link the unlinked lines that choose each other by mode, line number and stops.
+def _link_lines(candidates, min_stop_ratio: float = _ITINERARY_MATCH_MIN_RATIO) -> list[_LineCandidate]:
+    """Link every candidate whose stops agree; a source line with none is linked by its route ID alone.
 
-    A candidate of a line is a line of the other side with the same mode and
-    number that shares ``required_shared_stops``: four stops, or every stop of
-    the line that has fewer, but at least two. Its score is ``line_score``. An
-    unlinked OSM line is linked to its best candidate when that source line is
-    unlinked, the score reaches ``min_stop_ratio``, and each line leads the
-    other's next candidate by the margin. Lines linked by route ID count as
-    candidates too, so a line whose real counterpart is already linked is not
-    paired with a lookalike.
+    The stops agree when the stop score reaches ``min_stop_ratio``. A line can
+    be linked to several lines of the other side: the timetable splits one
+    line into several routes, and OSM can hold one line twice or in two parts.
+    Nothing is refused because another line fits too; how many lines a line is
+    linked to is for route problems to report.
     """
-    families = {family['id']: family for family in (*source_families, *osm_families) if not family.get('is_non_gtfs')}
-    by_stop = {'source': defaultdict(set), 'osm': defaultdict(set)}
-    for family in families.values():
-        for key in evidence.stop_keys.get(family['id'], ()):
-            by_stop[family['side']][key].add(family['id'])
-
-    def ranked_candidates(family_id, other_side):
-        shared = Counter(other_id for key in evidence.stop_keys.get(family_id, ())
-                         for other_id in by_stop[other_side].get(key, ()))
-        rows = []
-        for other_id, shared_stops in shared.items():
-            if (shared_stops >= evidence.required_shared_stops(family_id, other_id)
-                    and evidence.comparable(family_id, other_id)):
-                pair = (other_id, family_id) if other_side == 'source' else (family_id, other_id)
-                rows.append((evidence.line_score(*pair), other_id))
-        return sorted(rows, key=lambda row: (-row[0], row[1]))
-
-    def clear_best(rows):
-        return (bool(rows) and rows[0][0] >= min_stop_ratio
-                and (len(rows) == 1 or round(rows[0][0] - rows[1][0], 4) >= _LINE_FALLBACK_MIN_MARGIN))
-
+    by_source_line = defaultdict(list)
+    for candidate in candidates:
+        by_source_line[candidate.source_id].append(candidate)
     links = []
-    for osm_family in sorted(osm_families, key=lambda row: row['id']):
-        if osm_family['id'] in linked_osm_ids or osm_family['id'] not in families:
-            continue
-        candidates = ranked_candidates(osm_family['id'], 'source')
-        if not clear_best(candidates) or candidates[0][1] in linked_source_ids:
-            continue
-        source_family_id = candidates[0][1]
-        rivals = ranked_candidates(source_family_id, 'osm')
-        if clear_best(rivals) and rivals[0][1] == osm_family['id']:
-            links.append((families[source_family_id], osm_family))
-    return links
+    for rows in by_source_line.values():
+        agreeing = [row for row in rows if row.stop_score >= min_stop_ratio]
+        links.extend(agreeing or _by_route_id_alone(rows))
+    return sorted(links, key=lambda row: (row.source_id, row.osm_id))
+
+
+def _by_route_id_alone(candidates) -> list[_LineCandidate]:
+    """The OSM line that a route ID names for a source line whose stops agree with none: one candidate, or none.
+
+    The two lines must share a stop. With the timetable year ignored, they
+    must also have the same line number: between timetable years a route ID
+    can pass to another line, often one with the same number in another town.
+    Of several OSM lines that carry the ID, the same number comes first, then
+    the kind of ID, then the higher stop score; two that stay equal link none.
+    """
+    named = [row for row in candidates
+             if row.route_id and row.shares_a_stop and (row.same_number or row.route_id != _YEAR_IGNORED_ROUTE_ID)]
+
+    def rank(row):
+        return not row.same_number, _ROUTE_ID_KINDS.index(row.route_id)
+
+    named.sort(key=lambda row: (rank(row), -row.stop_score, row.osm_id))
+    if (len(named) > 1 and rank(named[0]) == rank(named[1])
+            and round(named[0].stop_score - named[1].stop_score, 4) < _ROUTE_ID_MIN_LEAD):
+        return []
+    return named[:1]
 
 
 def _parse_json_list(value: Any) -> list[str]:
@@ -1049,71 +1070,39 @@ def compare_routes(
         itinerary_list.sort(key=lambda row: row['id'])
 
     with progress_stage('route_matching.families'):
-        evidence = _LineEvidence(line_family_rows, itineraries_by_family_id, stop_calls_by_itinerary_id,
-                                 line_number_alias)
-        # E3.2 step 2: route IDs first, a year-ignored ID only when confirmed, then the stop fallback.
-        candidate_pairs = [
-            (score, source_family, osm_family, reason)
-            for score, source_family, osm_family, reason in _candidate_line_family_pairs(
-                source_line_families, osm_line_families)
-            if reason != 'normalized_gtfs_route_id'
-            or _route_id_confirmed(evidence, source_family['id'], osm_family['id'])
-        ]
-        # Equal scores: the same line number first, then the line that serves more of the stops.
-        candidate_pairs.sort(key=lambda item: (
-            -item[0],
-            not evidence.same_line_number(item[1]['id'], item[2]['id']),
-            -evidence.line_score(item[1]['id'], item[2]['id']),
-            item[1]['id'],
-            item[2]['id'],
-        ))
-
-        matched_source_family_ids: set[int] = set()
-        matched_osm_family_ids: set[int] = set()
-        chosen_pairs = []
-        for score, source_family, osm_family, reason in candidate_pairs:
-            if source_family['id'] in matched_source_family_ids or osm_family['id'] in matched_osm_family_ids:
-                continue
-            chosen_pairs.append((source_family, osm_family, reason))
-            matched_source_family_ids.add(source_family['id'])
-            matched_osm_family_ids.add(osm_family['id'])
-        chosen_pairs.extend(
-            (source_family, osm_family, 'line_number_and_stops')
-            for source_family, osm_family in _link_lines_by_number_and_stops(
-                source_line_families, osm_line_families, matched_source_family_ids, matched_osm_family_ids,
-                evidence, min_stop_ratio,
-            )
+        # E3.2 step 2: the itineraries of every candidate are compared once, here.
+        links = _link_lines(
+            _line_candidates(
+                source_line_families,
+                osm_line_families,
+                itineraries_by_family_id,
+                stop_calls_by_itinerary_id,
+                line_number_alias=line_number_alias,
+                require_direction_match=require_direction_match,
+                min_stop_ratio=min_stop_ratio,
+            ),
+            min_stop_ratio,
         )
-        for source_family, osm_family, reason in chosen_pairs:
-            line_family_match_rows.append({
-                'id': next(line_family_match_id_counter),
-                'source_line_family_id': source_family['id'],
-                'osm_line_family_id': osm_family['id'],
-                'match_method': reason,
-            })
 
     with progress_stage('route_matching.itineraries'):
-        for line_family_match_row in line_family_match_rows:
-            source_itineraries = itineraries_by_family_id.get(line_family_match_row['source_line_family_id'], [])
-            osm_itineraries = itineraries_by_family_id.get(line_family_match_row['osm_line_family_id'], [])
-            pair_scores: dict[tuple[int, int], dict[str, Any]] = {}
-            for source_itinerary in source_itineraries:
-                source_calls = stop_calls_by_itinerary_id.get(source_itinerary['id'], [])
-                for osm_itinerary in osm_itineraries:
-                    osm_calls = stop_calls_by_itinerary_id.get(osm_itinerary['id'], [])
-                    pair_scores[(source_itinerary['id'], osm_itinerary['id'])] = _score_itinerary_pair(
-                        source_itinerary,
-                        osm_itinerary,
-                        source_calls,
-                        osm_calls,
-                        require_direction_match=require_direction_match,
-                        min_stop_ratio=min_stop_ratio,
-                    )
-
-            for source_itinerary, osm_itinerary, score_row in _choose_best_itinerary_pairs(source_itineraries, osm_itineraries, pair_scores):
+        for link in links:
+            line_family_match_id = next(line_family_match_id_counter)
+            line_family_match_rows.append({
+                'id': line_family_match_id,
+                'source_line_family_id': link.source_id,
+                'osm_line_family_id': link.osm_id,
+                'match_method': link.match_method,
+                'stop_score': link.stop_score,
+            })
+            chosen_pairs = _choose_best_itinerary_pairs(
+                itineraries_by_family_id.get(link.source_id, []),
+                itineraries_by_family_id.get(link.osm_id, []),
+                link.scores,
+            )
+            for source_itinerary, osm_itinerary, score_row in chosen_pairs:
                 itinerary_match_rows.append({
                     'id': next(itinerary_match_id_counter),
-                    'line_family_match_id': line_family_match_row['id'],
+                    'line_family_match_id': line_family_match_id,
                     'source_itinerary_id': source_itinerary['id'],
                     'osm_itinerary_id': osm_itinerary['id'],
                     'stop_score': score_row['stop_score'],

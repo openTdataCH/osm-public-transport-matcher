@@ -237,24 +237,19 @@ def test_build_itinerary_rows_prefers_osm_from_to_for_display_and_to_for_headsig
     assert osm_itinerary['representative_headsign'] == 'Kienastenwies'
 
 
-def test_indexed_family_candidates_equal_exhaustive_scoring():
+def test_indexed_route_id_candidates_equal_exhaustive_comparison():
     import random
-    from osm_public_transport_matcher.routes import _candidate_line_family_pairs, _score_line_family_pair
+    from osm_public_transport_matcher.routes import _lines_named_by_route_id, _route_id_kind
     rng = random.Random(173)
     source = [dict(id=i, side='source', gtfs_route_id=rng.choice(['R1', 'R2', 'R3', None]),
                    normalized_route_id=rng.choice(['N1', 'N2', None])) for i in range(1, 31)]
     osm = [dict(id=i, side='osm', gtfs_route_id=rng.choice(['R1', 'R2', 'R3', None]),
                 normalized_route_id=rng.choice(['N1', 'N2', None]),
-                display_route_id=rng.choice(['R1', 'R3', None]), is_non_gtfs=i % 7 == 0)
+                display_route_id=rng.choice(['R1', 'R3', None]))
            for i in range(40, 90)]
-    exhaustive = []
-    for a in source:
-        for o in osm:
-            score, reason = _score_line_family_pair(a, o)
-            if score and not o['is_non_gtfs']:
-                exhaustive.append((score, a['id'], o['id'], reason))
-    indexed = [(score, a['id'], o['id'], reason) for score, a, o, reason in _candidate_line_family_pairs(source, osm)]
-    assert sorted(indexed) == sorted(exhaustive)
+    exhaustive = {(a['id'], o['id']): _route_id_kind(a, o) for a in source for o in osm if _route_id_kind(a, o)}
+    assert _lines_named_by_route_id(source, osm) == exhaustive
+    assert set(exhaustive.values()) == {'exact_gtfs_route_id', 'normalized_gtfs_route_id', 'display_route_id_match'}
 
 
 def test_stop_sequence_matches_equal_exhaustive_longest_common_subsequence():
@@ -309,8 +304,8 @@ def test_stop_position_and_platform_of_one_stop_make_one_call():
     assert score['stop_score'] == 1.0 and score['is_eligible']
 
 
-def _link_lines(gtfs_lines, osm_lines, **options):
-    """Run compare_routes on a small network and return {OSM line: (GTFS route ID, match method)}.
+def _links_of(gtfs_lines, osm_lines, **options):
+    """Run compare_routes on a small network and return its links as {(GTFS route ID, OSM line, match method)}.
 
     ``gtfs_lines`` holds (route_id, short_name, route_type, itineraries) and
     ``osm_lines`` holds (name, ref, route, gtfs_route_id, stops); every OSM line
@@ -357,7 +352,7 @@ def _link_lines(gtfs_lines, osm_lines, **options):
     base_data = SimpleNamespace(matched=matched, unmatched_source=[], unmatched_osm=[], all_osm_nodes=[], disused_osm=[])
     routes = compare_routes(route_data, {f'atlas:{stop}' for stop in stops}, base_data, **options)
     families = {row['id']: row for row in routes['line_families']}
-    return {families[row['osm_line_family_id']]['key']: (families[row['source_line_family_id']]['key'], row['match_method'])
+    return {(families[row['source_line_family_id']]['key'], families[row['osm_line_family_id']]['key'], row['match_method'])
             for row in routes['line_family_matches']}
 
 
@@ -393,68 +388,139 @@ BERN = ['B1', 'B2', 'B3', 'B4', 'B5']
 THUN = ['T1', 'T2', 'T3', 'T4', 'T5']
 
 
+BY_STOPS = 'line_number_and_stops'
+EXACT, YEAR_IGNORED = 'exact_gtfs_route_id', 'normalized_gtfs_route_id'
+
+
+def test_link_lines_links_every_candidate_whose_stops_agree_else_the_route_id_alone():
+    from osm_public_transport_matcher.routes import _LineCandidate, _link_lines
+
+    def row(source_id, osm_id, route_id=None, same_number=True, stop_score=0.0, shares_a_stop=True):
+        return _LineCandidate(source_id, osm_id, route_id, same_number, stop_score, shares_a_stop)
+
+    def linked(*rows, **options):
+        return [(link.source_id, link.osm_id) for link in _link_lines(rows, **options)]
+
+    # Stops that agree link on both sides: two routes of one OSM line, two OSM lines of one route.
+    assert linked(row(1, 10, stop_score=1.0), row(2, 10, stop_score=0.8), row(2, 11, stop_score=0.9)) == [
+        (1, 10), (2, 10), (2, 11)]
+    assert linked(row(1, 10, stop_score=0.79)) == []
+    assert linked(row(1, 10, stop_score=0.85), min_stop_ratio=0.9) == []
+    # A route ID whose stops do not agree is left out when the stops find a line,
+    # and links alone when they find none (IR 26: route D by its ID, route C by its stops).
+    assert linked(row(1, 10, EXACT, stop_score=0.5), row(1, 11, stop_score=0.8)) == [(1, 11)]
+    assert linked(row(1, 10, EXACT, stop_score=0.14), row(2, 10, stop_score=1.0)) == [(1, 10), (2, 10)]
+    # A route ID alone needs a shared stop and, with the year ignored, the same number.
+    assert linked(row(1, 10, EXACT, shares_a_stop=False)) == []
+    assert linked(row(1, 10, EXACT, same_number=False)) == [(1, 10)]
+    assert linked(row(1, 10, YEAR_IGNORED, same_number=False)) == []
+    assert linked(row(1, 10, YEAR_IGNORED)) == [(1, 10)]
+    # Several OSM lines carry the ID: the same number first, then the exact ID, then the stops by 0.1.
+    assert linked(row(1, 10, EXACT, same_number=False, stop_score=0.7), row(1, 11, YEAR_IGNORED, stop_score=0.3)) == [(1, 11)]
+    assert linked(row(1, 10, YEAR_IGNORED, stop_score=0.7), row(1, 11, EXACT, stop_score=0.3)) == [(1, 11)]
+    assert linked(row(1, 10, EXACT, stop_score=0.5), row(1, 11, EXACT, stop_score=0.3)) == [(1, 10)]
+    assert linked(row(1, 10, EXACT, stop_score=0.5), row(1, 11, EXACT, stop_score=0.45)) == []
+
+
+def test_lines_that_share_stations_but_not_platforms_have_the_itinerary_score():
+    from osm_public_transport_matcher.routes import _line_candidates, _link_lines
+
+    # IC 3: the trains stop at other tracks than the OSM stop positions were matched to,
+    # and two OSM calls are known by their station only.
+    stations = ['8500010', '8500218', '8503000', '8509000', '8509002']
+    calls = {
+        1: [{'source_stop_key': f'atlas:{station}:3', 'station_ref': station} for station in stations],
+        2: [{'source_stop_key': f'atlas:{station}:7' if index < 3 else None, 'station_ref': station}
+            for index, station in enumerate(stations)],
+    }
+    itineraries = {1: [{'id': 1, 'direction_id': '0'}], 2: [{'id': 2, 'direction_id': None}]}
+    gtfs = {'id': 1, 'side': 'source', 'route_type': '102', 'ref': 'IC3', 'gtfs_route_id': '91-3-C-j26-1'}
+
+    def candidates(osm_line):
+        return _line_candidates([gtfs], [osm_line], itineraries, calls)
+
+    [candidate] = candidates({'id': 2, 'side': 'osm', 'route_type': 'train', 'ref': 'IC 3'})
+    assert (candidate.route_id, candidate.same_number, candidate.stop_score, candidate.shares_a_stop) == (None, True, 1.0, True)
+    assert candidate.match_method == BY_STOPS and _link_lines([candidate]) == [candidate]
+    # Another number, another mode or a line marked non-GTFS is no candidate.
+    assert candidates({'id': 2, 'side': 'osm', 'route_type': 'train', 'ref': 'IC 30'}) == []
+    assert candidates({'id': 2, 'side': 'osm', 'route_type': 'bus', 'ref': 'IC 3'}) == []
+    assert candidates({'id': 2, 'side': 'osm', 'route_type': 'train', 'ref': 'IC 3', 'is_non_gtfs': True}) == []
+
+
 def test_year_ignored_route_id_of_a_line_elsewhere_is_refused_and_the_stops_find_the_line():
-    links = _link_lines(
+    links = _links_of(
         [('92-21-B-j26-1', '21', '700', [THUN, THUN[::-1]]), ('92-21-j26-1', '21', '700', [BERN, BERN[::-1]])],
         # Bern's bus 21 still carries the 2021 ID, which now belongs to Thun's bus 21.
         [('bern-21', '21', 'bus', '92-21-B-j21-1', BERN)],
     )
-    assert links == {'bern-21': ('92-21-j26-1', 'line_number_and_stops')}
+    assert links == {('92-21-j26-1', 'bern-21', BY_STOPS)}
 
 
-def test_year_ignored_route_id_needs_the_same_number_and_a_shared_stop():
-    gtfs = [('92-36-D-j26-1', '36', '700', [BERN])]
-    assert _link_lines(gtfs, [('a', '36', 'bus', '92-36-D-j22-1', BERN[:1] + THUN)]) == {
-        'a': ('92-36-D-j26-1', 'normalized_gtfs_route_id')}
-    assert _link_lines(gtfs, [('a', '92', 'bus', '92-36-D-j22-1', BERN)]) == {}
-    assert _link_lines(gtfs, [('a', '36', 'bus', '92-36-D-j22-1', THUN)]) == {}
-    # A refused ID no longer blocks the OSM line with the same ID that runs there.
-    links = _link_lines(gtfs, [('a', '36', 'bus', '92-36-D-j21-1', THUN), ('b', '36', 'bus', '92-36-D-j24-1', BERN)])
-    assert links == {'b': ('92-36-D-j26-1', 'normalized_gtfs_route_id')}
+def test_a_route_id_alone_needs_a_shared_stop_and_with_the_year_ignored_the_same_number():
+    route = '92-36-D-j26-1'
+    gtfs = [(route, '36', '700', [BERN])]
+    # One shared stop of six: the stops do not agree, and the ID links the lines.
+    assert _links_of(gtfs, [('a', '36', 'bus', '92-36-D-j22-1', BERN[:1] + THUN)]) == {(route, 'a', YEAR_IGNORED)}
+    assert _links_of(gtfs, [('a', '92', 'bus', '92-36-D-j22-1', BERN[:1] + THUN)]) == set()
+    assert _links_of(gtfs, [('a', '36', 'bus', '92-36-D-j22-1', THUN)]) == set()
+    # An exact ID needs a shared stop too, but not the number.
+    assert _links_of(gtfs, [('a', '92', 'bus', route, BERN[:1] + THUN)]) == {(route, 'a', EXACT)}
+    assert _links_of(gtfs, [('a', '36', 'bus', route, THUN)]) == set()
+    # With stops that agree, the line the ID names is linked whatever its number.
+    assert _links_of(gtfs, [('a', '92', 'bus', '92-36-D-j22-1', BERN)]) == {(route, 'a', YEAR_IGNORED)}
+    # A refused ID does not block the OSM line with the same ID that runs there.
+    links = _links_of(gtfs, [('a', '36', 'bus', '92-36-D-j21-1', THUN), ('b', '36', 'bus', '92-36-D-j24-1', BERN)])
+    assert links == {(route, 'b', YEAR_IGNORED)}
 
 
-def test_two_osm_lines_with_one_route_id_the_same_number_wins_then_the_stops():
+def test_an_osm_line_with_a_route_id_but_not_its_stops_is_left_out_when_the_stops_find_a_line():
     # Buses 521 and 523: both OSM lines carry the route ID of GTFS bus 521.
-    gtfs = [('96-729-j26-1', '521', '700', [BERN])]
-    links = _link_lines(gtfs, [('osm-523', '523', 'bus', '96-729-j26-1', BERN[:3] + THUN[:2]),
-                               ('osm-521', '521', 'bus', '96-729-j26-1', BERN)])
-    assert links == {'osm-521': ('96-729-j26-1', 'exact_gtfs_route_id')}
-    # With the same number on both, the line that serves more of the stops in order wins.
-    links = _link_lines(gtfs, [('part', '521', 'bus', '96-729-j26-1', BERN[:3] + THUN[:2]),
-                               ('whole', '521', 'bus', '96-729-j26-1', BERN)])
-    assert links == {'whole': ('96-729-j26-1', 'exact_gtfs_route_id')}
-    # The number counts before the stops: a line of another number does not win on its stops.
-    links = _link_lines(gtfs, [('other-number', '523', 'bus', '96-729-j26-1', BERN),
-                               ('same-number', '521', 'bus', '96-729-j26-1', BERN[:4] + THUN[:1])])
-    assert links == {'same-number': ('96-729-j26-1', 'exact_gtfs_route_id')}
+    route = '96-729-j26-1'
+    gtfs = [(route, '521', '700', [BERN])]
+    links = _links_of(gtfs, [('osm-523', '523', 'bus', route, BERN[:3] + THUN[:2]), ('osm-521', '521', 'bus', route, BERN)])
+    assert links == {(route, 'osm-521', EXACT)}
+    # Both have the stops: both are linked, also the one with another number.
+    links = _links_of(gtfs, [('osm-522', '522', 'bus', route, BERN), ('osm-521', '521', 'bus', route, BERN)])
+    assert links == {(route, 'osm-522', EXACT), (route, 'osm-521', EXACT)}
 
 
-def test_stop_fallback_needs_the_same_number_and_mode():
+def test_of_two_osm_lines_with_one_route_id_and_no_agreeing_stops_the_number_then_the_stops_decide():
+    route = '96-729-j26-1'
+    gtfs = [(route, '521', '700', [BERN + THUN])]
+    # The number counts before the stops: 7 of 10 stops under another number lose to 3 of 10.
+    links = _links_of(gtfs, [('other-number', '523', 'bus', route, BERN + THUN[:2]), ('same-number', '521', 'bus', route, BERN[:3])])
+    assert links == {(route, 'same-number', EXACT)}
+    links = _links_of(gtfs, [('part', '521', 'bus', route, BERN[:3]), ('more', '521', 'bus', route, BERN + THUN[:1])])
+    assert links == {(route, 'more', EXACT)}
+    assert _links_of(gtfs, [('a', '521', 'bus', route, BERN[:3]), ('b', '521', 'bus', route, BERN[:3])]) == set()
+
+
+def test_lines_without_a_route_id_need_the_same_number_and_mode():
     gtfs = [('92-3-j26-1', '3', '700', [BERN]), ('92-N3-j26-1', 'N3', '705', [BERN]), ('91-9-j26-1', '9', '900', [THUN])]
-    links = _link_lines(gtfs, [('night', 'N 3', 'bus', None, BERN), ('day', '3', 'bus', None, BERN),
-                               ('bus-9', '9', 'bus', None, THUN), ('no-ref', None, 'bus', None, THUN)])
-    assert links == {'night': ('92-N3-j26-1', 'line_number_and_stops'), 'day': ('92-3-j26-1', 'line_number_and_stops')}
+    links = _links_of(gtfs, [('night', 'N 3', 'bus', None, BERN), ('day', '3', 'bus', None, BERN),
+                             ('bus-9', '9', 'bus', None, THUN), ('no-ref', None, 'bus', None, THUN)])
+    assert links == {('92-N3-j26-1', 'night', BY_STOPS), ('92-3-j26-1', 'day', BY_STOPS)}
 
 
-def test_stop_fallback_needs_four_shared_stops_or_every_stop_of_a_shorter_line_and_the_itinerary_ratio():
+def test_the_stops_agree_at_the_itinerary_ratio_with_two_shared_stops():
     gtfs = [('92-5-j26-1', '5', '700', [BERN[:3]]), ('92-6-j26-1', '6', '700', [BERN + THUN])]
     # 7 of 10 stops in order is a ratio of 0.7.
-    assert _link_lines(gtfs, [('partial', '6', 'bus', None, BERN + THUN[:2])]) == {}
-    assert _link_lines(gtfs, [('partial', '6', 'bus', None, BERN + THUN[:3])]) == {
-        'partial': ('92-6-j26-1', 'line_number_and_stops')}
-    assert _link_lines(gtfs, [('partial', '6', 'bus', None, BERN + THUN[:3])], min_stop_ratio=0.9) == {}
-    # A line of three stops shares all three; one shared stop is never enough.
-    assert _link_lines(gtfs, [('short', '5', 'bus', None, BERN[:3])]) == {'short': ('92-5-j26-1', 'line_number_and_stops')}
-    assert _link_lines([('92-1-j26-1', '1', '700', [BERN[:1]])], [('one', '1', 'bus', None, BERN[:1])]) == {}
+    assert _links_of(gtfs, [('partial', '6', 'bus', None, BERN + THUN[:2])]) == set()
+    assert _links_of(gtfs, [('partial', '6', 'bus', None, BERN + THUN[:3])]) == {('92-6-j26-1', 'partial', BY_STOPS)}
+    assert _links_of(gtfs, [('partial', '6', 'bus', None, BERN + THUN[:3])], min_stop_ratio=0.9) == set()
+    # A line of three stops shares all three; one shared stop shows no order.
+    assert _links_of(gtfs, [('short', '5', 'bus', None, BERN[:3])]) == {('92-5-j26-1', 'short', BY_STOPS)}
+    assert _links_of([('92-1-j26-1', '1', '700', [BERN[:1]])], [('one', '1', 'bus', None, BERN[:1])]) == set()
 
 
 def test_a_two_station_cableway_is_linked_by_its_number_and_both_stations():
     # PB 2586 carries a route ID that is not in the timetable; its two stations are its only stops.
     gtfs = [('93-258-6-j26-1', '2586', '1300', [['L1', 'L2'], ['L2', 'L1']])]
-    assert _link_lines(gtfs, [('pb-2586', '2586', 'aerialway', '93-8J-Y-j26-1', ['L1', 'L2'])]) == {
-        'pb-2586': ('93-258-6-j26-1', 'line_number_and_stops')}
-    assert _link_lines(gtfs, [('pb-2586', '2586', 'aerialway', None, ['L1', 'L3'])]) == {}
-    assert _link_lines(gtfs, [('pb-2586', '2586', 'funicular', None, ['L1', 'L2'])]) == {}
+    assert _links_of(gtfs, [('pb-2586', '2586', 'aerialway', '93-8J-Y-j26-1', ['L1', 'L2'])]) == {
+        ('93-258-6-j26-1', 'pb-2586', BY_STOPS)}
+    assert _links_of(gtfs, [('pb-2586', '2586', 'aerialway', None, ['L1', 'L3'])]) == set()
+    assert _links_of(gtfs, [('pb-2586', '2586', 'funicular', None, ['L1', 'L2'])]) == set()
 
 
 def test_a_source_call_takes_its_resolved_stops_station_else_the_feeds():
@@ -470,22 +536,36 @@ def test_a_source_call_takes_its_resolved_stops_station_else_the_feeds():
     assert station_only['source_stop_key'] is None
 
 
-def test_stop_fallback_refuses_a_line_without_a_clear_best_candidate():
-    # Two GTFS route IDs for one line 400 on the same stops; then scores 1.0 and 0.92.
+def test_a_line_takes_every_line_whose_stops_agree():
+    # Two GTFS route IDs for one line 400 on the same stops: the OSM line takes both.
     gtfs = [('92-400-j26-1', '400', '700', [BERN]), ('92-400-A-j26-1', '400', '700', [BERN])]
-    assert _link_lines(gtfs, [('a', '400', 'bus', None, BERN)]) == {}
-    line = BERN + THUN + ['U1', 'U2']
-    gtfs = [('92-400-j26-1', '400', '700', [line]), ('92-400-A-j26-1', '400', '700', [line[:-2] + ['X', 'U2']])]
-    assert _link_lines(gtfs, [('a', '400', 'bus', None, line)]) == {}
-    # With a clear lead (1.0 against 0.57), the line is linked.
+    assert _links_of(gtfs, [('a', '400', 'bus', None, BERN)]) == {
+        ('92-400-j26-1', 'a', BY_STOPS), ('92-400-A-j26-1', 'a', BY_STOPS)}
+    # A route that shares 4 of 7 stops stays out.
     gtfs = [('92-400-j26-1', '400', '700', [BERN]), ('92-400-A-j26-1', '400', '700', [BERN[:4] + THUN[:3]])]
-    assert _link_lines(gtfs, [('a', '400', 'bus', None, BERN)]) == {'a': ('92-400-j26-1', 'line_number_and_stops')}
-    # Two OSM lines that both look like the GTFS line: neither is linked.
-    assert _link_lines(gtfs[:1], [('a', '400', 'bus', None, BERN), ('b', '400', 'bus', None, BERN)]) == {}
+    assert _links_of(gtfs, [('a', '400', 'bus', None, BERN)]) == {('92-400-j26-1', 'a', BY_STOPS)}
+    # One line mapped twice in OSM: the GTFS route takes both, the tagged one by its ID.
+    links = _links_of(gtfs[:1], [('tagged', '400', 'bus', '92-400-j26-1', BERN), ('copy', '400', 'bus', None, BERN)])
+    assert links == {('92-400-j26-1', 'tagged', EXACT), ('92-400-j26-1', 'copy', BY_STOPS)}
 
 
-def test_stop_fallback_never_takes_a_linked_line_or_settles_for_a_lookalike():
-    gtfs = [('92-7-j26-1', '7', '700', [BERN]), ('92-7-A-j26-1', '7', '700', [BERN[:4] + THUN[:1]])]
-    links = _link_lines(gtfs, [('tagged', '7', 'bus', '92-7-j26-1', BERN), ('copy', '7', 'bus', None, BERN)])
-    # The copy's best candidate is linked by ID, so it is not paired with the lookalike 92-7-A.
-    assert links == {'tagged': ('92-7-j26-1', 'exact_gtfs_route_id')}
+def test_a_route_id_and_the_stops_of_another_route_link_one_osm_line_to_both():
+    # IR 26: the OSM tag names the route of a short section; another route has all the stops.
+    gtfs = [('91-26-C-j26-1', 'IR26', '102', [BERN + THUN]),
+            ('91-26-D-j26-1', 'IR26', '102', [BERN[:2] + ['X1', 'X2', 'X3']])]
+    links = _links_of(gtfs, [('ir-26', 'IR 26', 'train', '91-26-D-j26-1', BERN + THUN)])
+    assert links == {('91-26-C-j26-1', 'ir-26', BY_STOPS), ('91-26-D-j26-1', 'ir-26', EXACT)}
+
+
+def test_itineraries_are_paired_inside_every_link_of_a_line():
+    from osm_public_transport_matcher.routes import _choose_best_itinerary_pairs, _line_candidates, _link_lines
+
+    calls = {itinerary: [{'source_stop_key': f'atlas:{stop}', 'station_ref': None} for stop in BERN] for itinerary in (1, 2, 3)}
+    itineraries = {1: [{'id': 1, 'direction_id': '0'}], 2: [{'id': 2, 'direction_id': '0'}], 3: [{'id': 3, 'direction_id': None}]}
+    twins = [{'id': family, 'side': 'source', 'route_type': '700', 'ref': '400'} for family in (1, 2)]
+    links = _link_lines(_line_candidates(twins, [{'id': 3, 'side': 'osm', 'route_type': 'bus', 'ref': '400'}], itineraries, calls,
+                                         require_direction_match=False))
+    pairs = [(source['id'], osm['id']) for link in links
+             for source, osm, _ in _choose_best_itinerary_pairs(itineraries[link.source_id], itineraries[link.osm_id], link.scores)]
+    # The one relation is the itinerary of both twin routes.
+    assert pairs == [(1, 3), (2, 3)]

@@ -117,8 +117,8 @@ The `routes` section holds one row per collection. Each `value` is the complete 
 | `line_families` | line on either side | `id`, `side`, `key`, `family_origin`, `public_name`, `ref`, `operator`, `gtfs_route_id`, `normalized_route_id`, `display_route_id` |
 | `itineraries` | direction or variant on either side | `id`, `side`, `key`, `line_family_id`, `direction_id`, `display_name`, `representative_headsign`, `trip_count`, `canonical_stop_count` |
 | `stop_calls` | stop of an itinerary, in order | `id`, `itinerary_id`, `stop_sequence`, `source_stop_id`, `source_stop_key`, `source_stop_key_variants`, `osm_node_id`, `canonical_stop_key`, `stop_label`, `station_ref`, `platform_code` (source), `member_role` (OSM), position |
-| `line_family_matches` | matched pair of families | `id`, `source_line_family_id`, `osm_line_family_id`, `match_method` ([E3.2](3.2%20Route-route%20matching.md#step-2-match-the-families)) |
-| `itinerary_matches` | matched pair of itineraries | `id`, `line_family_match_id`, `source_itinerary_id`, `osm_itinerary_id`, `stop_score` and `match_reason` ([E3.2](3.2%20Route-route%20matching.md#step-4-pair-the-itineraries)) |
+| `line_family_matches` | matched pair of families; a family can be in several | `id`, `source_line_family_id`, `osm_line_family_id`, `match_method` and `stop_score` ([E3.2](3.2%20Route-route%20matching.md#step-4-match-the-families)) |
+| `itinerary_matches` | matched pair of itineraries | `id`, `line_family_match_id`, `source_itinerary_id`, `osm_itinerary_id`, `stop_score` and `match_reason` ([E3.2](3.2%20Route-route%20matching.md#step-5-pair-the-itineraries)) |
 
 Two counters complete the section: `matched_routes`, the number of family matches, and `unknown_source_stop_references`, the number of source stop calls whose stop is not among the bundle's source stops.
 

@@ -180,7 +180,8 @@
       "id": 1,
       "source_line_family_id": 1,
       "osm_line_family_id": 2,
-      "match_method": "normalized_gtfs_route_id"
+      "match_method": "normalized_gtfs_route_id",
+      "stop_score": 0.0
     }
   ],
   "itinerary_matches": [
