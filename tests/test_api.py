@@ -98,6 +98,51 @@ def test_swiss_station_reference_preserves_multiple_links_and_duplicate_propagat
     assert output.duplicate_key_map == source.duplicate_key_map
 
 
+def duplicate_reports(output):
+    """The duplicate problems as (source key, OSM id, priority), with '' for a side the problem does not name."""
+    return sorted((''.join(problem.source_keys), ''.join(problem.osm_ids), problem.priority)
+                  for problem in output.problems if problem.problem_type == 'duplicates')
+
+
+def test_a_source_duplicate_matched_to_a_pair_is_reported_once_on_the_match_a_rule_made():
+    a, b = swiss_stop('a', 8., 'A'), swiss_stop('b', 8.00001, 'A')
+    source = SourceState([a, b], {a.key: [a.key, b.key], b.key: [a.key, b.key]})
+    osm = [OsmNode('1', 47., 8.0001, uic_ref='850001', local_ref='A', public_transport='platform'),
+           OsmNode('2', 47., 8., uic_ref='850001', local_ref='A', public_transport='stop_position')]
+    output = match(source, osm, SWITZERLAND)
+    rules = {(row.source_node.key, row.osm_node.node_id): row.match_type for row in output.matched}
+    assert rules[a.key, '2'] == 'osm_pair_propagation' and rules[b.key, '1'] == 'source_duplicate_propagation'
+    # The partner is closer, and b has no match of its own: one report, on the match a rule made.
+    assert duplicate_reports(output) == [(a.key, '1', 2)]
+    assert [[p.problem_type for p in row.problems] for row in output.matched
+            if (row.source_node.key, row.osm_node.node_id) == (a.key, '2')] == [[]]
+
+
+def test_an_osm_duplicate_matched_by_two_source_duplicates_is_reported_once():
+    a, b = swiss_stop('a', 8., 'A'), swiss_stop('b', 8.00001, 'A')
+    source = SourceState([a, b], {a.key: [a.key, b.key], b.key: [a.key, b.key]})
+    osm = [OsmNode('1', 47., 8., uic_ref='850001', local_ref='A', public_transport='platform'),
+           OsmNode('2', 47.01, 8., uic_ref='850001', local_ref='a', public_transport='platform')]
+    output = match(source, osm, SWITZERLAND)
+    matched = {(row.source_node.key, row.osm_node.node_id): row.match_type for row in output.matched}
+    assert matched[b.key, '1'] == 'source_duplicate_propagation'
+    reports = duplicate_reports(output)
+    # Element 1 once, on the match a rule made; a match with an OSM duplicate never reports the source stop.
+    assert [report for report in reports if report[1] == '1'] == [(a.key, '1', 3)]
+    assert all(priority == 3 for _, _, priority in reports)
+    assert sorted(node for _, node, _ in reports) == ['1', '2']
+
+
+def test_unmatched_duplicates_are_reported_on_the_stop_itself():
+    a, b = swiss_stop('a', 8., 'A'), swiss_stop('b', 8.00001, 'A')
+    source = SourceState([a, b], {a.key: [a.key, b.key], b.key: [a.key, b.key]})
+    osm = [OsmNode(node_id, 48., 9. + index / 1000, uic_ref='850009', local_ref='1', public_transport='platform')
+           for index, node_id in enumerate('12')]
+    output = match(source, osm, SWITZERLAND)
+    assert output.matched == []
+    assert duplicate_reports(output) == [('', '1', 3), ('', '2', 3), (a.key, '', 2), (b.key, '', 2)]
+
+
 def test_two_sided_stop_middle_is_effectively_matched_with_no_unmatched_problem():
     source = [swiss_stop('a', 8., 'A'), swiss_stop('b', 8.0001, 'B')]
     osm = [

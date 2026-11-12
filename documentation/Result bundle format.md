@@ -93,7 +93,7 @@ An **OSM stop unit** has `side: "osm"`, `stop_kind` (`single`, `pair` or `two_si
 
 Each problem has a stable `problem_id`, derived from its type and the sorted keys of the entities it affects; its `evidence` can change between runs without changing that identity. [E4.1](4.1%20Stop%20problems.md) explains every `problem_type` and its priorities.
 
-Each match row repeats the problems of that pair (type, priority and duplicate flags) in its `problems` field; the same problems appear in the `problems` section with their keys and evidence. Every unmatched source stop, and every unmatched OSM element that is neither effectively matched nor disused, has an `unmatched` problem; the other OSM elements have none.
+Each match row repeats the problems of that pair (type, priority and duplicate flags) in its `problems` field; the same problems appear in the `problems` section with their keys and evidence. Every unmatched source stop, and every unmatched OSM element that is neither effectively matched nor disused, has an `unmatched` problem; the other OSM elements have none. A duplicate stop with several matches has its `duplicates` problem on one of them only ([E4.1](4.1%20Stop%20problems.md#duplicate-problems)).
 
 A problem's keys and `evidence` depend on the record it was found on. Every `evidence` holds the duplicate flags `has_source_duplicate` and `has_osm_duplicate`, and also:
 

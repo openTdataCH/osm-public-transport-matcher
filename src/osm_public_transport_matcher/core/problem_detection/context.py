@@ -83,7 +83,9 @@ class ProblemContext:
     duplicate_key_map: dict = field(default_factory=dict)       # {key: [group]}
     duplicate_osm_group_map: dict = field(default_factory=dict)   # {node_id: [group]}
     duplicate_osm_node_ids: set = field(default_factory=set)      # set of node_ids
-    handled_duplicate_keys: set = field(default_factory=set)    # source keys already handled by source_duplicate_propagation
+    # The one match that reports each matched duplicate stop
+    duplicate_report_by_osm: dict = field(default_factory=dict)     # {node_id: MatchRecord}
+    duplicate_report_by_source: dict = field(default_factory=dict)  # {key: MatchRecord}
 
     @classmethod
     def build(cls, output: 'MatchingOutput') -> "ProblemContext":
@@ -117,10 +119,8 @@ class ProblemContext:
         # -- OSM duplicate groups (excludes pre-grouped nodes) ----------------
         ctx._build_osm_duplicate_map(matched, unmatched_osm, grouped_osm_node_ids)
 
-        # -- Track source keys handled by source_duplicate_propagation --------------
-        for rec in matched:
-            if rec.match_type == 'source_duplicate_propagation':
-                ctx.handled_duplicate_keys.add(str(rec.source_node.key))
+        # -- The match that reports each matched duplicate stop ---------------
+        ctx._build_duplicate_reports(matched)
 
         return ctx
 
@@ -229,6 +229,29 @@ class ProblemContext:
                 group = sorted(node_ids)
                 for nid in node_ids:
                     self.duplicate_osm_group_map[nid] = group
+
+    def _build_duplicate_reports(self, matched: list['MatchRecord']):
+        """Choose the one match that reports each matched duplicate stop.
+
+        A duplicate is a fact about one stop, not about a match, so a stop with
+        several matches is reported once: on the closest match that a rule made.
+        A propagated match reports nothing, and a match whose OSM element is a
+        duplicate never reports its source stop.
+        """
+        def closest(reports, stop_id, rec):
+            def order(r):
+                return r.distance_m, str(r.osm_node.node_id), str(r.source_node.key)
+            if stop_id not in reports or order(rec) < order(reports[stop_id]):
+                reports[stop_id] = rec
+
+        for rec in matched:
+            if rec.propagated:
+                continue
+            node_id, key = str(rec.osm_node.node_id), str(rec.source_node.key)
+            if node_id in self.duplicate_osm_node_ids:
+                closest(self.duplicate_report_by_osm, node_id, rec)
+            elif key in self.duplicate_key_map:
+                closest(self.duplicate_report_by_source, key, rec)
 
     # ------------------------------------------------------------------
     # Shared nearest-distance helper

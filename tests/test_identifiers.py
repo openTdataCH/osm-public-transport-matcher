@@ -178,6 +178,19 @@ def test_a_tagged_member_of_an_atlas_duplicate_group_brings_the_group_along():
                              (first.source_id, '80', 'source_duplicate_propagation')}
 
 
+def test_a_duplicate_stop_named_by_two_elements_is_reported_once_on_the_closest_match():
+    first = atlas('ch:1:sloid:8:0:1', 47.0, 8.0, code='1', uic='8500008')
+    second = atlas('ch:1:sloid:8:0:2', 47.0, 8.00001, code='1', uic='8500008')
+    elements = [osm('far', 47.0, 8.0003, ref__sloid=first.source_id),
+                osm('near', 47.0, 8.0001, ref__sloid=first.source_id)]
+    output = match(atlas_state([first, second]), elements, SWITZERLAND)
+    assert {(source, node) for source, node, kind in links(output) if kind == 'sloid_identifier'} == {
+        (first.source_id, 'far'), (first.source_id, 'near')}
+    # second has only a propagated match, so it is not reported.
+    assert [(problem.source_keys, problem.osm_ids, problem.priority) for problem in output.problems
+            if problem.problem_type == 'duplicates'] == [((first.key,), ('near',), 2)]
+
+
 def test_parser_and_query_keep_ways_that_carry_a_stop_identifier(tmp_path):
     from osm_public_transport_matcher.acquisition.overpass import build_public_transport_query
     query = build_public_transport_query()

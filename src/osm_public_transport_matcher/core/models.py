@@ -128,6 +128,10 @@ class OsmEntity(SourceEntity):
     """An OSM representative and its explicitly related members."""
 
 
+# Matches that no rule made: they follow another match to the rest of its group.
+PROPAGATED_MATCH_TYPES = frozenset({'source_duplicate_propagation', 'osm_pair_propagation'})
+
+
 @dataclass
 class MatchRecord:
     source_node: SourceStop
@@ -137,6 +141,10 @@ class MatchRecord:
     notes: str
     problems: list = field(default_factory=list)
     evidence: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def propagated(self) -> bool:
+        return self.match_type in PROPAGATED_MATCH_TYPES
 
     def evaluate_matched_problems(self, problem_ctx, predicates):
         self.problems = [problem for predicate in predicates for problem in predicate(problem_ctx, self)]
