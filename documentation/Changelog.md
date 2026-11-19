@@ -4,6 +4,10 @@ Here you can find notable changes to the standalone `osm-public-transport-matche
 
 ---
 
+## Version 0.1.1
+
+- **`GTFS_MEMORY_LIMIT` defaults to `1536MB`** — `768MB` ran out of memory on the Swiss feed. See [E5.2](5.2%20Pipeline%20performance.md#settings-and-logs).
+
 ## Version 0.1.0
 
 First public release. The matching code of the atlas.osm.ch review application becomes a package of its own, which the application now consumes through result bundles.

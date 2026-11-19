@@ -24,7 +24,7 @@ TABLES = ('stops', 'trips', 'routes', 'stop_route_unique', 'route_directions')
 def connect(path=':memory:'):
     return duckdb.connect(str(path), config={
         'threads': int(os.getenv('GTFS_THREADS', '2')),
-        'memory_limit': os.getenv('GTFS_MEMORY_LIMIT', '768MB'),
+        'memory_limit': os.getenv('GTFS_MEMORY_LIMIT', '1536MB'),
         'preserve_insertion_order': True,
     })
 
